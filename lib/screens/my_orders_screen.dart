@@ -1,34 +1,34 @@
-// lib/screens/my_orders_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MyOrdersScreen extends StatefulWidget {
-  const MyOrdersScreen({Key? key}) : super(key: key);
+  const MyOrdersScreen({super.key});
 
   @override
-  _MyOrdersScreenState createState() => _MyOrdersScreenState();
+  State<MyOrdersScreen> createState() => _MyOrdersScreenState();
 }
 
 class _MyOrdersScreenState extends State<MyOrdersScreen> {
-  String? _phone;
+  String _phone = '';
 
   @override
   void initState() {
     super.initState();
-    _initData();
+    _loadPhoneAndClearBadges();
   }
 
-  Future<void> _initData() async {
+  Future<void> _loadPhoneAndClearBadges() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _phone = prefs.getString('phone');
+      _phone = prefs.getString('phone') ?? '';
     });
-    _clearBadges();
+    if (_phone.isNotEmpty) {
+      await _clearBadges();
+    }
   }
 
   Future<void> _clearBadges() async {
-    if (_phone == null) return;
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('orders')
@@ -40,207 +40,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         await doc.reference.update({'has_unread_update': false});
       }
     } catch (e) {
-      debugPrint('Error clearing badges: $e');
+      debugPrint('Ошибка при очистке бейджей: $e');
     }
-  }
-
-  Future<void> _updateOrderStatus(String docId, String newStatus, String successMessage) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('orders')
-          .doc(docId)
-          .update({'status': newStatus});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(successMessage)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления: $e')),
-        );
-      }
-    }
-  }
-
-  Widget _buildOrderCard(Map<String, dynamic> data, String status, String docId) {
-    Color cardColor = Colors.white;
-    Widget statusContent = const SizedBox();
-
-    final String adminComment = data['admin_comment'] ?? 'Нет комментария';
-    final String price = data['price']?.toString() ?? '0';
-    final String deviceType = data['device_type'] ?? 'Устройство';
-    final String problem = data['problem'] ?? 'Не указана';
-
-    if (status == 'new') {
-      cardColor = Colors.grey.shade200;
-      statusContent = Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Text(
-          'Статус: Ожидает диагностики',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-        ),
-      );
-    } else if (status == 'awaiting_approval') {
-      cardColor = Colors.orange.shade50;
-      statusContent = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade200,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              '⚠️ Требуется согласование!',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.deepOrange),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Диагноз мастера: $adminComment',
-            style: const TextStyle(fontSize: 15),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Стоимость ремонта: $price руб.',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () => _updateOrderStatus(
-                    docId,
-                    'in_progress',
-                    'Вы успешно согласовали ремонт!',
-                  ),
-                  child: const Text('Согласиться', style: TextStyle(fontSize: 16)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade600,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () => _updateOrderStatus(
-                    docId,
-                    'canceled',
-                    'Ремонт отменен',
-                  ),
-                  child: const Text('Отказаться', style: TextStyle(fontSize: 16)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      );
-    } else if (status == 'in_progress') {
-      cardColor = Colors.blue.shade50;
-      statusContent = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade200,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Статус: В работе (Ремонтируется)',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Диагноз мастера: $adminComment',
-            style: const TextStyle(fontSize: 15),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Стоимость ремонта: $price руб.',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-        ],
-      );
-    } else if (status == 'completed') {
-      cardColor = Colors.green.shade50;
-      statusContent = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.green.shade200,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Статус: Готово к выдаче! 🎉',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Итоговая цена: $price руб.',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-        ],
-      );
-    } else if (status == 'canceled') {
-      cardColor = Colors.red.shade50;
-      statusContent = Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.red.shade200,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Text(
-          'Статус: Отменен',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red),
-        ),
-      );
-    }
-
-    return Card(
-      color: cardColor,
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              deviceType,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Проблема: $problem',
-              style: const TextStyle(fontSize: 15, color: Colors.black87),
-            ),
-            const Divider(height: 24, thickness: 1),
-            statusContent,
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -249,7 +50,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       appBar: AppBar(
         title: const Text('Мои ремонты'),
       ),
-      body: _phone == null
+      body: _phone.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -261,32 +62,173 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Произошла ошибка: ${snapshot.error}'),
-                  );
-                }
-
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return const Center(
                     child: Text(
                       'У вас пока нет заявок на ремонт',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                      style: TextStyle(fontSize: 16),
                     ),
                   );
                 }
 
-                final docs = snapshot.data!.docs;
+                // Извлекаем и сортируем документы
+                final docs = snapshot.data!.docs.toList();
+                
+                docs.sort((a, b) {
+                  final dataA = a.data() as Map<String, dynamic>;
+                  final dataB = b.data() as Map<String, dynamic>;
+                  
+                  final statusA = dataA['status'] ?? '';
+                  final statusB = dataB['status'] ?? '';
+                  
+                  // Высший приоритет у awaiting_approval
+                  if (statusA == 'awaiting_approval' && statusB != 'awaiting_approval') {
+                    return -1; // a выше b
+                  } else if (statusA != 'awaiting_approval' && statusB == 'awaiting_approval') {
+                    return 1; // b выше a
+                  }
+                  
+                  // Сортировка по дате создания (по убыванию, от новых к старым)
+                  final tsA = dataA['created_at'] as Timestamp?;
+                  final tsB = dataB['created_at'] as Timestamp?;
+                  
+                  if (tsA == null && tsB == null) return 0;
+                  if (tsA == null) return 1; // null (еще не записано на сервере) уходит вниз или вверх на ваше усмотрение
+                  if (tsB == null) return -1;
+                  
+                  return tsB.compareTo(tsA);
+                });
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(12),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     final doc = docs[index];
                     final data = doc.data() as Map<String, dynamic>;
-                    final String status = data['status'] ?? 'new';
+                    final status = data['status'];
+                    final adminComment = data['admin_comment'] ?? 'Нет данных';
+                    final price = data['price'] ?? '0';
+                    final problem = data['problem'] ?? 'Без описания';
+                    final deviceType = data['device_type'] ?? 'Устройство';
 
-                    return _buildOrderCard(data, status, doc.id);
+                    if (status == 'awaiting_approval') {
+                      return Card(
+                        color: Colors.orange.shade100,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$deviceType: $problem', 
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                '⚠️ Требуется согласование!', 
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 16),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('Диагноз мастера: $adminComment'),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Стоимость ремонта: $price руб.', 
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                      onPressed: () async {
+                                        await doc.reference.update({'status': 'in_progress'});
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Вы успешно согласовали ремонт!')),
+                                          );
+                                        }
+                                      },
+                                      child: const Text('Согласиться', style: TextStyle(color: Colors.white)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade400),
+                                      onPressed: () async {
+                                        await doc.reference.update({'status': 'canceled'});
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Ремонт отменен')),
+                                          );
+                                        }
+                                      },
+                                      child: const Text('Отказаться', style: TextStyle(color: Colors.black87)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    Color badgeColor = Colors.grey;
+                    String statusText = 'Неизвестно';
+
+                    if (status == 'new') {
+                      badgeColor = Colors.grey.shade300;
+                      statusText = 'Ожидает диагностики';
+                    } else if (status == 'in_progress') {
+                      badgeColor = Colors.blue.shade200;
+                      statusText = 'В работе (Ремонтируется)';
+                    } else if (status == 'completed') {
+                      badgeColor = Colors.green.shade300;
+                      statusText = 'Готово к выдаче! 🎉';
+                    } else if (status == 'canceled') {
+                      badgeColor = Colors.red.shade200;
+                      statusText = 'Отменен';
+                    }
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$deviceType: $problem', 
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: badgeColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'Статус: $statusText', 
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            if (status == 'in_progress' || status == 'completed') ...[
+                              const SizedBox(height: 12),
+                              Text('Диагноз мастера: $adminComment'),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Стоимость ремонта: $price руб.', 
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
                   },
                 );
               },
