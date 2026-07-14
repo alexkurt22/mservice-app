@@ -20,7 +20,7 @@ void main() async {
 
   if (phone != null && phone.isNotEmpty) {
     if (status == 'approved') {
-      initialScreen = const HomeScreen();
+      initialScreen = HomeScreen();
     } else if (status == 'pending') {
       initialScreen = const PendingScreen();
     }
