@@ -32,7 +32,7 @@ class _PendingScreenState extends State<PendingScreen> {
   Future<void> _sendSms(String authCode) async {
     final Uri smsUri = Uri(
       scheme: 'sms',
-      path: '+99360000000',
+      path: '+99363644925',
       queryParameters: <String, String>{
         'body': 'Подтверждение регистрации. Мой код: $authCode',
       },
