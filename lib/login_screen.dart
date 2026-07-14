@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
         } else if (status == 'approved') {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            MaterialPageRoute(builder: (_) => HomeScreen()),
           );
         }
       }
@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Обратитесь к администратору: +99360000000'),
+                    content: Text('Обратитесь к администратору: +99363644925'),
                   ),
                 );
               },
