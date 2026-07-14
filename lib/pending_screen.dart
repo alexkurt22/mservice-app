@@ -120,7 +120,7 @@ class _PendingScreenState extends State<PendingScreen> {
               if (mounted) {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  MaterialPageRoute(builder: (_) => HomeScreen()),
                 );
               }
             } else if (status == 'rejected') {
