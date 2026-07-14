@@ -23,6 +23,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          
+      - name: Generate system files
+        run: flutter create --platforms=android .
 
       - name: Install dependencies
         run: flutter pub get
