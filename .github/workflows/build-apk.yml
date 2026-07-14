@@ -26,6 +26,12 @@ jobs:
           
       - name: Generate system files
         run: flutter create --platforms=android .
+        
+      - name: Fix Android Manifest for SMS
+        run: |
+          echo "import 'dart:io'; void main() { var f = File('android/app/src/main/AndroidManifest.xml'); var text = f.readAsStringSync(); text = text.replaceFirst('<application', '<queries><intent><action android:name=\"android.intent.action.VIEW\"/><data android:scheme=\"sms\"/></intent></queries><application'); f.writeAsStringSync(text); }" > fix_manifest.dart
+          dart fix_manifest.dart
+
 
       - name: Install dependencies
         run: flutter pub get
