@@ -29,6 +29,7 @@ class _PendingScreenState extends State<PendingScreen> {
     });
   }
 
+  // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ОТПРАВКИ СМС ---
   Future<void> _sendSms(String authCode) async {
     final Uri smsUri = Uri(
       scheme: 'sms',
@@ -37,16 +38,20 @@ class _PendingScreenState extends State<PendingScreen> {
         'body': 'Подтверждение регистрации. Мой код: $authCode',
       },
     );
-    if (await canLaunchUrl(smsUri)) {
-      await launchUrl(smsUri);
-    } else {
+    
+    try {
+      // Принудительно открываем системное приложение сообщений, 
+      // игнорируя системные блокировки Android 11+ и Redmi
+      await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось открыть приложение SMS')),
+          SnackBar(content: Text('Не удалось открыть приложение SMS. Ошибка: $e')),
         );
       }
     }
   }
+  // ------------------------------------------
 
   void _showRejectedDialog(String reason, Map<String, dynamic> data) {
     showDialog(
@@ -143,6 +148,10 @@ class _PendingScreenState extends State<PendingScreen> {
                 const SizedBox(height: 32),
                 ElevatedButton(
                   onPressed: () => _sendSms(authCode),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    textStyle: const TextStyle(fontSize: 16),
+                  ),
                   child: const Text('Отправить SMS'),
                 ),
                 const SizedBox(height: 32),
@@ -155,3 +164,4 @@ class _PendingScreenState extends State<PendingScreen> {
     );
   }
 }
+
