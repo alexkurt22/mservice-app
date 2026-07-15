@@ -1,14 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'firebase_options.dart'; // <--- ВОТ ТА САМАЯ ПОТЕРЯННАЯ СТРОЧКА!
 import 'login_screen.dart';
+import 'home_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  
+  // Запускаем Firebase ПРАВИЛЬНО, с передачей твоих ключей!
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Проверяем память телефона на наличие сохраненного входа
+  final prefs = await SharedPreferences.getInstance();
+  final phone = prefs.getString('phone');
+
+  // Если номер есть — кидаем на главный экран, если нет — на вход
+  Widget initialScreen = (phone != null && phone.isNotEmpty) ? HomeScreen() : LoginScreen();
+
+  runApp(MyApp(initialScreen: initialScreen));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Widget initialScreen;
+
+  const MyApp({super.key, required this.initialScreen});
 
   @override
   Widget build(BuildContext context) {
@@ -17,39 +35,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blueGrey,
       ),
-      // FutureBuilder гарантирует, что черный экран не появится!
-      home: FutureBuilder(
-        future: Firebase.initializeApp(),
-        builder: (context, snapshot) {
-          // Если произошла ошибка при запуске — выводим её на экран
-          if (snapshot.hasError) {
-            return Scaffold(
-              backgroundColor: Colors.white,
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Text(
-                    'Ошибка запуска:\n${snapshot.error}',
-                    style: const TextStyle(color: Colors.red, fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            );
-          }
-          // Если всё успешно — открываем экран входа
-          if (snapshot.connectionState == ConnectionState.done) {
-            return LoginScreen();
-          }
-          // Пока грузится — показываем крутилку (никакого черного экрана)
-          return const Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        },
-      ),
+      home: initialScreen,
       debugShowCheckedModeBanner: false,
     );
   }
