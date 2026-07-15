@@ -1,14 +1,17 @@
+// lib/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'login_screen.dart';
-import 'screens/create_order_screen.dart';
 import 'screens/my_orders_screen.dart';
+import 'create_order_screen.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({Key? key}) : super(key: key);
+
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -18,25 +21,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadUserData();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _phone = prefs.getString('phone');
-      _clientName = prefs.getString('client_name');
+      _clientName = prefs.getString('client_name'); // Достаем имя клиента
     });
 
     if (_phone != null) {
-      await _setupPushNotifications();
+      _setupPushNotifications();
     }
   }
 
   Future<void> _setupPushNotifications() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.requestPermission();
-
+    
     String? token = await messaging.getToken();
     if (token != null && _phone != null) {
       await FirebaseFirestore.instance.collection('clients').doc(_phone).set(
@@ -60,10 +63,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    Navigator.pushAndRemoveUntil(
+    if (!mounted) return;
+    Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
-      (route) => false,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
   }
 
@@ -75,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // Приветствие пользователя
         title: Text('Добро пожаловать, ${_clientName ?? "Клиент"}!'),
         actions: [
           IconButton(
@@ -86,19 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(20)),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CreateOrderScreen()),
-                );
-              },
-              child: const Text('Создать заявку', style: TextStyle(fontSize: 18)),
-            ),
-            const SizedBox(height: 16),
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('orders')
@@ -110,34 +102,45 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (snapshot.hasData) {
                   unreadCount = snapshot.data!.docs.length;
                 }
+
                 return Badge(
                   isLabelVisible: unreadCount > 0,
                   label: Text(unreadCount.toString()),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.all(20),
-                      minimumSize: const Size.fromHeight(60),
+                  child: Card(
+                    elevation: 4,
+                    child: ListTile(
+                      leading: const Icon(Icons.build, size: 40, color: Colors.blue),
+                      title: const Text('Мои ремонты', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      subtitle: const Text('История и согласование статуса'),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MyOrdersScreen(),
+                          ),
+                        );
+                      },
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => MyOrdersScreen()),
-                      );
-                    },
-                    child: const Text('Мои ремонты', style: TextStyle(fontSize: 18)),
                   ),
                 );
               },
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(20)),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('В разработке')),
-                );
-              },
-              child: const Text('Бонусы и Профиль', style: TextStyle(fontSize: 18)),
+            Card(
+              elevation: 4,
+              child: ListTile(
+                leading: const Icon(Icons.add_circle, size: 40, color: Colors.green),
+                title: const Text('Новая заявка', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Создать заявку на ремонт'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CreateOrderScreen(),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
