@@ -1,151 +1,138 @@
+// lib/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'register_screen.dart';
-import 'pending_screen.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({Key? key}) : super(key: key);
+
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _rememberMe = true;
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  bool _isLogin = true;
   bool _isLoading = false;
 
-  Future<void> _login() async {
-    setState(() => _isLoading = true);
+  Future<void> _submit() async {
     final phone = _phoneController.text.trim();
-    final password = _passwordController.text;
+    final password = _passwordController.text.trim();
+    final name = _nameController.text.trim();
 
-    if (phone.length != 8) {
+    if (phone.isEmpty || password.isEmpty || (!_isLogin && name.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите корректный номер (8 цифр)')),
+        const SnackBar(content: Text('Пожалуйста, заполните все поля')),
       );
-      setState(() => _isLoading = false);
       return;
     }
 
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      final query = await FirebaseFirestore.instance
-          .collection('users')
-          .where('phone', isEqualTo: phone)
-          .where('password', isEqualTo: password)
-          .get();
+      final docRef = FirebaseFirestore.instance.collection('clients').doc(phone);
+      final clientDoc = await docRef.get();
 
-      if (query.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Неверный телефон или пароль')),
-        );
-        setState(() => _isLoading = false);
-        return;
+      String? clientName;
+
+      if (_isLogin) {
+        // Логика входа
+        if (!clientDoc.exists) {
+          throw Exception('Пользователь не найден');
+        }
+        if (clientDoc.data()?['password'] != password) {
+          throw Exception('Неверный пароль');
+        }
+        clientName = clientDoc.data()?['client_name'];
+      } else {
+        // Логика регистрации
+        if (clientDoc.exists) {
+          throw Exception('Пользователь с таким номером уже существует');
+        }
+        clientName = name;
+        await docRef.set({
+          'phone': phone,
+          'password': password,
+          'client_name': clientName,
+          'created_at': FieldValue.serverTimestamp(),
+        });
       }
 
-      final userData = query.docs.first.data();
-      final status = userData['status'];
-      final clientName = userData['client_name'];
-
-      if (status == 'rejected') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Профиль отклонен: ${userData['rejection_reason'] ?? 'без причины'}')),
-        );
-        setState(() => _isLoading = false);
-        return;
-      }
-
+      // Обязательно сохраняем имя пользователя в SharedPreferences под ключом 'client_name'
       final prefs = await SharedPreferences.getInstance();
-      if (_rememberMe) {
-        await prefs.setString('phone', phone);
-        await prefs.setString('status', status);
-      }
-      
-      // Обязательно сохраняем имя клиента в SharedPreferences
+      await prefs.setString('phone', phone);
       if (clientName != null) {
         await prefs.setString('client_name', clientName);
       }
 
-      if (status == 'pending') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => PendingScreen()),
-        );
-      } else if (status == 'approved') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
-        );
-      }
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+        SnackBar(content: Text('Ошибка: ${e.toString()}')),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Вход')),
+      appBar: AppBar(title: Text(_isLogin ? 'Вход' : 'Регистрация')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (!_isLogin)
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Ваше имя'),
+              ),
+            if (!_isLogin) const SizedBox(height: 16),
             TextField(
               controller: _phoneController,
+              decoration: const InputDecoration(labelText: 'Телефон'),
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Телефон',
-                prefixText: '+993 ',
-              ),
-              maxLength: 8,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _passwordController,
-              obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'Пароль',
-                hintText: 'минимум 6 символов',
+                hintText: 'минимум 6 символов', // Косметика для пароля
               ),
+              obscureText: true,
             ),
-            const SizedBox(height: 8),
-            CheckboxListTile(
-              title: const Text('Запомнить меня'),
-              value: _rememberMe,
-              onChanged: (val) => setState(() => _rememberMe = val ?? true),
-              controlAffinity: ListTileControlAffinity.leading,
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Обратитесь к администратору: +99360000000')),
-                  );
-                },
-                child: const Text('Забыли пароль?'),
-              ),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const CircularProgressIndicator()
                 : ElevatedButton(
-                    onPressed: _login,
-                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
-                    child: const Text('Войти', style: TextStyle(fontSize: 16)),
+                    onPressed: _submit,
+                    child: Text(_isLogin ? 'Войти' : 'Зарегистрироваться'),
                   ),
             TextButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => RegisterScreen()),
-              ),
-              child: const Text('Зарегистрироваться'),
+              onPressed: () {
+                setState(() {
+                  _isLogin = !_isLogin;
+                });
+              },
+              child: Text(_isLogin
+                  ? 'Нет аккаунта? Зарегистрироваться'
+                  : 'Уже есть аккаунт? Войти'),
             ),
           ],
         ),
