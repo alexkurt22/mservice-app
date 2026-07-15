@@ -48,8 +48,12 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50], // Корпоративный светлый фон
       appBar: AppBar(
-        title: const Text('Мои ремонты'),
+        title: const Text('Мои заказы', style: TextStyle(fontSize: 18)),
+        backgroundColor: Colors.blueGrey[900], // Темная строгая шапка
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: _phone == null
           ? const Center(child: CircularProgressIndicator())
@@ -64,10 +68,17 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 }
 
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'У вас пока нет заявок на ремонт',
-                      style: TextStyle(fontSize: 16),
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inbox_outlined, size: 64, color: Colors.blueGrey[200]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'У вас пока нет активных заказов',
+                          style: TextStyle(fontSize: 16, color: Colors.blueGrey[500]),
+                        ),
+                      ],
                     ),
                   );
                 }
@@ -117,16 +128,27 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         return Card(
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 16.0),
-          color: Colors.grey.shade100,
-          child: ListTile(
-            title: Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Column(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: Colors.grey.shade300, width: 1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
                 const SizedBox(height: 8),
-                Text('Проблема: ${data['problem']}'),
-                const SizedBox(height: 8),
-                const Text('Статус: Ожидает диагностики', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                Text('Проблема: ${data['problem']}', style: TextStyle(color: Colors.blueGrey[800])),
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    Icon(Icons.hourglass_empty, size: 20, color: Colors.blueGrey[400]),
+                    const SizedBox(width: 8),
+                    Text('Статус: Ожидает диагностики', style: TextStyle(color: Colors.blueGrey[600], fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ],
             ),
           ),
@@ -137,7 +159,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           margin: const EdgeInsets.only(bottom: 16.0),
           color: Colors.orange.shade50,
           shape: RoundedRectangleBorder(
-            side: const BorderSide(color: Colors.orange, width: 2),
+            side: const BorderSide(color: Colors.orange, width: 1.5),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Padding(
@@ -145,47 +167,67 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
                 const SizedBox(height: 8),
                 Text('Проблема: ${data['problem']}'),
-                const Divider(),
-                const Text('⚠️ Требуется согласование!', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 16)),
-                const SizedBox(height: 8),
+                const Divider(height: 24),
+                Row(
+                  children: const [
+                    Icon(Icons.warning_amber_rounded, color: Colors.deepOrange),
+                    SizedBox(width: 8),
+                    Text('Требуется согласование!', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange, fontSize: 16)),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 
                 if (options != null) ...[
-                  const Text('Мастер предложил варианты ремонта. Выберите подходящий:', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('Мастер предложил варианты ремонта. Выберите подходящий:', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
                   const SizedBox(height: 8),
                   ...options.asMap().entries.map((entry) {
                     final int idx = entry.key;
                     final opt = entry.value as Map<String, dynamic>;
-                    return RadioListTile<int>(
-                      title: Text(opt['description'] ?? ''),
-                      subtitle: Text('${opt['price']} руб.', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      value: idx,
-                      groupValue: _selectedOptions[order.id],
-                      activeColor: Colors.orange,
-                      onChanged: (int? value) {
-                        setState(() {
-                          if (value != null) {
-                            _selectedOptions[order.id] = value;
-                          }
-                        });
-                      },
-                      contentPadding: EdgeInsets.zero,
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: _selectedOptions[order.id] == idx ? Colors.orange : Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: RadioListTile<int>(
+                        title: Text(opt['description'] ?? '', style: const TextStyle(fontSize: 15)),
+                        subtitle: Text('${opt['price']} TMT', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                        value: idx,
+                        groupValue: _selectedOptions[order.id],
+                        activeColor: Colors.orange,
+                        onChanged: (int? value) {
+                          setState(() {
+                            if (value != null) {
+                              _selectedOptions[order.id] = value;
+                            }
+                          });
+                        },
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
                     );
                   }),
                 ] else ...[
                   Text('Диагноз мастера: ${data['admin_comment']}'),
                   const SizedBox(height: 8),
-                  Text('Стоимость ремонта: ${data['price']} руб.', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Стоимость ремонта: ${data['price']} TMT', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                 ],
                 
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Row(
                   children: [
                     Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 1,
+                        ),
                         onPressed: () async {
                           if (options != null) {
                             final selectedIdx = _selectedOptions[order.id];
@@ -204,7 +246,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                               'has_unread_update': true,
                             });
                           } else {
-                            // Для старых заказов без массива options
                             await order.reference.update({
                               'status': 'in_progress',
                               'has_unread_update': true,
@@ -213,17 +254,24 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                           
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Вы успешно согласовали ремонт!')),
+                              const SnackBar(content: Text('Вы успешно согласовали ремонт!'), backgroundColor: Colors.green),
                             );
                           }
                         },
-                        child: const Text('Согласиться'),
+                        icon: const Icon(Icons.check_circle_outline, size: 20),
+                        label: const Text('Согласиться', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade300, foregroundColor: Colors.black87),
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[300],
+                          foregroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
                         onPressed: () async {
                           await order.reference.update({
                             'status': 'canceled',
@@ -235,7 +283,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                             );
                           }
                         },
-                        child: const Text('Отказаться'),
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        label: const Text('Отказаться', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
                     ),
                   ],
@@ -250,13 +299,14 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         final color = isCompleted ? Colors.green.shade50 : Colors.blue.shade50;
         final borderColor = isCompleted ? Colors.green : Colors.blue;
         final statusText = isCompleted ? 'Статус: Готово к выдаче! 🎉' : 'Статус: В работе (Ремонтируется)';
+        final iconStatus = isCompleted ? Icons.check_circle : Icons.handyman;
         
         return Card(
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 16.0),
           color: color,
           shape: RoundedRectangleBorder(
-            side: BorderSide(color: borderColor.withOpacity(0.5), width: 1),
+            side: BorderSide(color: borderColor.withOpacity(0.5), width: 1.5),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Padding(
@@ -264,16 +314,21 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
                 const SizedBox(height: 8),
-                Text('Проблема: ${data['problem']}'),
-                const Divider(),
-                Text(statusText, style: TextStyle(fontWeight: FontWeight.bold, color: borderColor, fontSize: 16)),
-                const SizedBox(height: 8),
+                Text('Проблема: ${data['problem']}', style: TextStyle(color: Colors.blueGrey[800])),
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    Icon(iconStatus, color: borderColor, size: 22),
+                    const SizedBox(width: 8),
+                    Text(statusText, style: TextStyle(fontWeight: FontWeight.bold, color: borderColor, fontSize: 16)),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 
                 if (options != null && data.containsKey('selected_option_index')) ...[
-                  const SizedBox(height: 8),
-                  const Text('Аудиторский след предложений:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                  const Text('Согласованный вариант:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
                   const SizedBox(height: 8),
                   ...options.asMap().entries.map((entry) {
                     final int idx = entry.key;
@@ -287,7 +342,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                         children: [
                           Icon(
                             isSelected ? Icons.check_circle : Icons.cancel_outlined,
-                            color: isSelected ? Colors.green : Colors.grey,
+                            color: isSelected ? Colors.green[600] : Colors.grey[400],
                             size: 20,
                           ),
                           const SizedBox(width: 8),
@@ -299,19 +354,17 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                                   opt['description'] ?? '',
                                   style: TextStyle(
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    color: isSelected ? Colors.black87 : Colors.grey,
+                                    color: isSelected ? Colors.black87 : Colors.grey[500],
                                     decoration: isSelected ? TextDecoration.none : TextDecoration.lineThrough,
                                   ),
                                 ),
                                 Text(
-                                  '${opt['price']} руб.',
+                                  '${opt['price']} TMT',
                                   style: TextStyle(
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    color: isSelected ? Colors.black87 : Colors.grey,
+                                    color: isSelected ? (isCompleted ? Colors.green[700] : Colors.blue[700]) : Colors.grey[500],
                                   ),
                                 ),
-                                if (isSelected)
-                                  const Text('Выбранный вариант', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ),
@@ -320,13 +373,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     );
                   }),
                   if (isCompleted) ...[
-                     const Divider(),
-                     Text('Итоговая цена: ${data['price']} руб.', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                     const Divider(height: 24),
+                     Text('Итого к оплате: ${data['price']} TMT', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                   ]
                 ] else ...[
                   Text('Диагноз мастера: ${data['admin_comment']}'),
                   const SizedBox(height: 8),
-                  Text('Утвержденная цена: ${data['price']} руб.', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('Утвержденная цена: ${data['price']} TMT', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: borderColor)),
                 ],
               ],
             ),
@@ -337,15 +390,26 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 16.0),
           color: Colors.red.shade50,
-          child: ListTile(
-            title: Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Column(
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: Colors.red.shade200, width: 1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
                 const SizedBox(height: 8),
-                Text('Проблема: ${data['problem']}'),
-                const SizedBox(height: 8),
-                const Text('Статус: Отменен', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                Text('Проблема: ${data['problem']}', style: TextStyle(color: Colors.blueGrey[800])),
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    Icon(Icons.cancel, size: 20, color: Colors.red[700]),
+                    const SizedBox(width: 8),
+                    Text('Статус: Ремонт отменен', style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold, fontSize: 16)),
+                  ],
+                ),
               ],
             ),
           ),
@@ -355,3 +419,4 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 }
+
