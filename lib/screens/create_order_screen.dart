@@ -1,62 +1,68 @@
+// lib/create_order_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CreateOrderScreen extends StatefulWidget {
+  const CreateOrderScreen({Key? key}) : super(key: key);
+
   @override
-  _CreateOrderScreenState createState() => _CreateOrderScreenState();
+  State<CreateOrderScreen> createState() => _CreateOrderScreenState();
 }
 
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
-  final _problemController = TextEditingController();
-  String _deviceType = 'Ноутбук';
-  String _deliveryMethod = 'Привезу в сервис сам';
+  final TextEditingController _deviceController = TextEditingController();
+  final TextEditingController _problemController = TextEditingController();
   bool _isLoading = false;
 
-  final List<String> _deviceTypes = ['Ноутбук', 'ПК', 'Моноблок', 'Другое'];
-  final List<String> _deliveryMethods = ['Привезу в сервис сам', 'Нужен выезд мастера'];
-
   Future<void> _submitOrder() async {
+    final device = _deviceController.text.trim();
     final problem = _problemController.text.trim();
-    if (problem.isEmpty) {
+
+    if (device.isEmpty || problem.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пожалуйста, опишите проблему')),
+        const SnackBar(content: Text('Пожалуйста, заполните все поля')),
       );
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone');
-      final clientName = prefs.getString('client_name') ?? 'Клиент';
+      final clientName = prefs.getString('client_name'); // Достаем имя клиента
 
       if (phone == null) {
-        throw Exception('Номер телефона не найден в памяти');
+        throw Exception('Ошибка: номер телефона не найден');
       }
 
       await FirebaseFirestore.instance.collection('orders').add({
-        'client_name': clientName,
         'phone': phone,
-        'device_type': _deviceType,
+        'client_name': clientName ?? 'Клиент', // Добавляем client_name в документ заказа
+        'device': device,
         'problem': problem,
-        'delivery_method': _deliveryMethod,
         'status': 'new',
         'created_at': FieldValue.serverTimestamp(),
+        'has_unread_update': false,
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заявка успешно отправлена!')),
+        const SnackBar(content: Text('Заявка успешно создана!')),
       );
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка отправки: $e')),
+        SnackBar(content: Text('Ошибка: ${e.toString()}')),
       );
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -64,66 +70,37 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Новая заявка')),
-      body: SingleChildScrollView(
+      appBar: AppBar(title: const Text('Новая заявка на ремонт')),
+      body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DropdownButtonFormField<String>(
-              value: _deviceType,
+            TextField(
+              controller: _deviceController,
               decoration: const InputDecoration(
-                labelText: 'Тип техники',
+                labelText: 'Устройство (например, iPhone 12)',
                 border: OutlineInputBorder(),
               ),
-              items: _deviceTypes.map((type) {
-                return DropdownMenuItem(
-                  value: type,
-                  child: Text(type),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() => _deviceType = val);
-                }
-              },
             ),
             const SizedBox(height: 16),
-            TextFormField(
+            TextField(
               controller: _problemController,
+              maxLines: 4,
               decoration: const InputDecoration(
                 labelText: 'Описание проблемы',
                 border: OutlineInputBorder(),
               ),
-              maxLines: 3,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Способ доставки:',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            ..._deliveryMethods.map((method) {
-              return RadioListTile<String>(
-                title: Text(method),
-                value: method,
-                groupValue: _deliveryMethod,
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => _deliveryMethod = val);
-                  }
-                },
-              );
-            }).toList(),
             const SizedBox(height: 24),
             _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      textStyle: const TextStyle(fontSize: 18),
+                ? const CircularProgressIndicator()
+                : SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _submitOrder,
+                      child: const Text('Отправить заявку', style: TextStyle(fontSize: 16)),
                     ),
-                    onPressed: _submitOrder,
-                    child: const Text('Отправить заявку'),
                   ),
           ],
         ),
