@@ -39,8 +39,13 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Upload Artifact
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/mservice_crm.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          # Робот возьмет текст твоего коммита (например "база плюс профиль") и сделает его названием архива!
+          name: mservice_crm_${{ github.event.head_commit.message }}
+          path: build/app/outputs/flutter-apk/mservice_app.apk
+
