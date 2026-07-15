@@ -32,32 +32,40 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      // Твой стандартный префикс
       final fullPhone = '+993$phone';
 
       if (_isLogin) {
+        // --- ТВОЙ РАБОЧИЙ ВХОД ---
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
         if (doc.exists) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['password'].toString() == password) {
+            
+            // Аккуратно сохраняем имя в память, не трогая логику проверки
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('phone', fullPhone);
             await prefs.setString('client_name', data['name'] ?? 'Клиент');
             
             if (mounted) {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => HomeScreen()),
+              );
             }
           } else {
             _showError('Неверный пароль');
           }
         } else {
-          _showError('Пользователь не найден');
+          _showError('Пользователь с таким номером не найден');
         }
       } else {
+        // --- ТВОЯ РАБОЧАЯ РЕГИСТРАЦИЯ ---
         final name = _nameController.text.trim();
         final confirm = _confirmPasswordController.text.trim();
 
         if (name.isEmpty || confirm.isEmpty) {
-          _showError('Заполните все поля');
+          _showError('Заполните все поля для регистрации');
           setState(() => _isLoading = false);
           return;
         }
@@ -74,8 +82,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
         if (doc.exists) {
-          _showError('Пользователь уже зарегистрирован');
+          _showError('Пользователь с таким номером уже зарегистрирован');
         } else {
+          // Создание документа в исходном стабильном формате
           await FirebaseFirestore.instance.collection('clients').doc(fullPhone).set({
             'name': name,
             'phone': fullPhone,
@@ -88,12 +97,15 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString('client_name', name);
 
           if (mounted) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => HomeScreen()),
+            );
           }
         }
       }
     } catch (e) {
-      _showError('Ошибка: $e');
+      _showError('Системная ошибка: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -101,50 +113,76 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red[800]),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.redAccent,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            padding: const EdgeInsets.all(24.0),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(Icons.business_center, size: 48, color: Colors.blueGrey[900]),
-                SizedBox(height: 16),
+                const Icon(Icons.computer, size: 64, color: Colors.blueGrey),
+                const SizedBox(height: 24),
                 Text(
-                  'M-SERVICE',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.blueGrey[900], letterSpacing: 1.5),
+                  _isLogin ? 'Вход в систему' : 'Регистрация',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 8),
-                Text(
-                  _isLogin ? 'ВХОД В СИСТЕМУ' : 'РЕГИСТРАЦИЯ',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1.0),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 48),
-
+                const SizedBox(height: 32),
+                
                 if (!_isLogin) ...[
-                  _buildTextField(_nameController, 'Ваше имя', Icons.person),
-                  SizedBox(height: 16),
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Ваше имя',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
 
-                _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 '),
-                SizedBox(height: 16),
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Номер телефона',
+                    prefixText: '+993 ',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
-                _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов'),
-                SizedBox(height: 16),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Пароль',
+                    hintText: 'минимум 6 символов',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
                 if (!_isLogin) ...[
-                  _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true),
+                  TextField(
+                    controller: _confirmPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Повторите пароль',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
 
                 if (_isLogin)
@@ -152,29 +190,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () async {
-                        final url = Uri.parse('tel:+99360000000');
-                        if (await canLaunchUrl(url)) await launchUrl(url);
+                        final url = Uri.parse('tel:+99360000000'); // Твой номер поддержки
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(url);
+                        }
                       },
-                      child: Text('Забыли пароль?', style: TextStyle(color: Colors.blueGrey[700])),
+                      child: const Text('Забыли пароль?'),
                     ),
                   ),
 
-                SizedBox(height: _isLogin ? 16 : 32),
-
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueGrey[900],
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
+                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                   onPressed: _isLoading ? null : _submit,
                   child: _isLoading 
-                      ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                      : Text(_isLogin ? 'ВОЙТИ' : 'ОТПРАВИТЬ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                      : Text(_isLogin ? 'Войти' : 'Зарегистрироваться'),
                 ),
-                SizedBox(height: 24),
 
                 TextButton(
                   onPressed: () {
@@ -186,10 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       _confirmPasswordController.clear();
                     });
                   },
-                  child: Text(
-                    _isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти',
-                    style: TextStyle(color: Colors.blueGrey[600], fontSize: 15),
-                  ),
+                  child: Text(_isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'),
                 ),
               ],
             ),
@@ -198,25 +226,5 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText}) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      obscureText: obscureText,
-      style: TextStyle(fontSize: 16),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hintText,
-        prefixText: prefixText,
-        prefixStyle: TextStyle(fontSize: 16, color: Colors.black87),
-        prefixIcon: Icon(icon, color: Colors.blueGrey[400]),
-        filled: true,
-        fillColor: Colors.grey[100],
-        contentPadding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.blueGrey)),
-      ),
-    );
-  }
 }
+
