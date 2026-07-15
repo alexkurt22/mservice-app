@@ -16,7 +16,7 @@ void main() async {
   final phone = prefs.getString('phone');
   final status = prefs.getString('status');
 
-  Widget initialScreen = const LoginScreen();
+  Widget initialScreen = LoginScreen();
 
   if (phone != null && phone.isNotEmpty) {
     if (status == 'approved') {
