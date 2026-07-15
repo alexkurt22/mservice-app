@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'login_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -18,7 +17,39 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blueGrey,
       ),
-      home: LoginScreen(), // Надежный запуск экрана входа напрямую
+      // FutureBuilder гарантирует, что черный экран не появится!
+      home: FutureBuilder(
+        future: Firebase.initializeApp(),
+        builder: (context, snapshot) {
+          // Если произошла ошибка при запуске — выводим её на экран
+          if (snapshot.hasError) {
+            return Scaffold(
+              backgroundColor: Colors.white,
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    'Ошибка запуска:\n${snapshot.error}',
+                    style: const TextStyle(color: Colors.red, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            );
+          }
+          // Если всё успешно — открываем экран входа
+          if (snapshot.connectionState == ConnectionState.done) {
+            return LoginScreen();
+          }
+          // Пока грузится — показываем крутилку (никакого черного экрана)
+          return const Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
+      ),
       debugShowCheckedModeBanner: false,
     );
   }
