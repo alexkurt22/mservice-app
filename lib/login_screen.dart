@@ -20,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     setState(() => _isLoading = true);
-    FocusScope.of(context).unfocus(); // Скрываем клавиатуру
+    FocusScope.of(context).unfocus();
 
     try {
       final phone = _phoneController.text.trim();
@@ -32,40 +32,32 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Возвращаем наш железный префикс
       final fullPhone = '+993$phone';
 
       if (_isLogin) {
-        // --- ЛОГИКА ВХОДА ---
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
         if (doc.exists) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['password'].toString() == password) {
-            
-            // Сохраняем данные в память телефона
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('phone', fullPhone);
             await prefs.setString('client_name', data['name'] ?? 'Клиент');
             
             if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => HomeScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
             }
           } else {
             _showError('Неверный пароль');
           }
         } else {
-          _showError('Пользователь с таким номером не найден');
+          _showError('Пользователь не найден');
         }
       } else {
-        // --- ЛОГИКА РЕГИСТРАЦИИ ---
         final name = _nameController.text.trim();
         final confirm = _confirmPasswordController.text.trim();
 
         if (name.isEmpty || confirm.isEmpty) {
-          _showError('Заполните все поля для регистрации');
+          _showError('Заполните все поля');
           setState(() => _isLoading = false);
           return;
         }
@@ -82,9 +74,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
         if (doc.exists) {
-          _showError('Пользователь с таким номером уже зарегистрирован');
+          _showError('Пользователь уже зарегистрирован');
         } else {
-          // Создаем нового пользователя
           await FirebaseFirestore.instance.collection('clients').doc(fullPhone).set({
             'name': name,
             'phone': fullPhone,
@@ -92,21 +83,17 @@ class _LoginScreenState extends State<LoginScreen> {
             'created_at': FieldValue.serverTimestamp(),
           });
 
-          // Сохраняем в память
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('phone', fullPhone);
           await prefs.setString('client_name', name);
 
           if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => HomeScreen()),
-            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
           }
         }
       }
     } catch (e) {
-      _showError('Системная ошибка: $e');
+      _showError('Ошибка: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -114,148 +101,121 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: TextStyle(color: Colors.white, fontSize: 16)),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: Colors.red[800]),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50], // Приятный фон
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Icon(Icons.computer, size: 64, color: Colors.blueAccent),
-                    SizedBox(height: 24),
-                    Text(
-                      _isLogin ? 'Вход в систему' : 'Регистрация',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 32),
-                    
-                    // ПОЛЕ: ИМЯ (Только при регистрации)
-                    if (!_isLogin) ...[
-                      TextField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Ваше имя',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          prefixIcon: Icon(Icons.person),
-                        ),
-                      ),
-                      SizedBox(height: 16),
-                    ],
-
-                    // ПОЛЕ: ТЕЛЕФОН
-                    TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: 'Номер телефона',
-                        prefixText: '+993 ', // ВЕРНУЛИ ПРЕФИКС!
-                        prefixStyle: TextStyle(fontSize: 16, color: Colors.black87),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        prefixIcon: Icon(Icons.phone),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // ПОЛЕ: ПАРОЛЬ
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Пароль',
-                        hintText: 'Минимум 6 символов',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        prefixIcon: Icon(Icons.lock),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // ПОЛЕ: ПОВТОР ПАРОЛЯ (Только при регистрации)
-                    if (!_isLogin) ...[
-                      TextField(
-                        controller: _confirmPasswordController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Повторите пароль',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          prefixIcon: Icon(Icons.lock_outline),
-                        ),
-                      ),
-                    ],
-
-                    // КНОПКА ЗАБЫЛИ ПАРОЛЬ
-                    if (_isLogin)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () async {
-                            final url = Uri.parse('tel:+99360000000'); // Позже впишем твой номер
-                            if (await canLaunchUrl(url)) {
-                              await launchUrl(url);
-                            }
-                          },
-                          child: Text('Забыли пароль?'),
-                        ),
-                      ),
-                    
-                    SizedBox(height: _isLogin ? 8 : 24),
-
-                    // ГЛАВНАЯ КНОПКА
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: _isLoading ? null : _submit,
-                      child: _isLoading 
-                          ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                          : Text(_isLogin ? 'Войти' : 'Зарегистрироваться'),
-                    ),
-                    SizedBox(height: 16),
-
-                    // ПЕРЕКЛЮЧАТЕЛЬ ВХОД/РЕГИСТРАЦИЯ
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isLogin = !_isLogin;
-                          _phoneController.clear();
-                          _passwordController.clear();
-                          _nameController.clear();
-                          _confirmPasswordController.clear();
-                        });
-                      },
-                      child: Text(
-                        _isLogin 
-                          ? 'Нет аккаунта? Зарегистрироваться' 
-                          : 'Уже есть аккаунт? Войти',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ],
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(Icons.business_center, size: 48, color: Colors.blueGrey[900]),
+                SizedBox(height: 16),
+                Text(
+                  'M-SERVICE',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.blueGrey[900], letterSpacing: 1.5),
+                  textAlign: TextAlign.center,
                 ),
-              ),
+                SizedBox(height: 8),
+                Text(
+                  _isLogin ? 'ВХОД В СИСТЕМУ' : 'РЕГИСТРАЦИЯ',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1.0),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 48),
+
+                if (!_isLogin) ...[
+                  _buildTextField(_nameController, 'Ваше имя', Icons.person),
+                  SizedBox(height: 16),
+                ],
+
+                _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 '),
+                SizedBox(height: 16),
+
+                _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов'),
+                SizedBox(height: 16),
+
+                if (!_isLogin) ...[
+                  _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true),
+                ],
+
+                if (_isLogin)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () async {
+                        final url = Uri.parse('tel:+99360000000');
+                        if (await canLaunchUrl(url)) await launchUrl(url);
+                      },
+                      child: Text('Забыли пароль?', style: TextStyle(color: Colors.blueGrey[700])),
+                    ),
+                  ),
+
+                SizedBox(height: _isLogin ? 16 : 32),
+
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueGrey[900],
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  onPressed: _isLoading ? null : _submit,
+                  child: _isLoading 
+                      ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                      : Text(_isLogin ? 'ВОЙТИ' : 'ОТПРАВИТЬ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                ),
+                SizedBox(height: 24),
+
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLogin = !_isLogin;
+                      _phoneController.clear();
+                      _passwordController.clear();
+                      _nameController.clear();
+                      _confirmPasswordController.clear();
+                    });
+                  },
+                  child: Text(
+                    _isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти',
+                    style: TextStyle(color: Colors.blueGrey[600], fontSize: 15),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText}) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      style: TextStyle(fontSize: 16),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        prefixText: prefixText,
+        prefixStyle: TextStyle(fontSize: 16, color: Colors.black87),
+        prefixIcon: Icon(icon, color: Colors.blueGrey[400]),
+        filled: true,
+        fillColor: Colors.grey[100],
+        contentPadding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.blueGrey)),
       ),
     );
   }
