@@ -1,140 +1,260 @@
-// lib/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
-
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  _LoginScreenState createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
   bool _isLogin = true;
   bool _isLoading = false;
 
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
   Future<void> _submit() async {
-    final phone = _phoneController.text.trim();
-    final password = _passwordController.text.trim();
-    final name = _nameController.text.trim();
-
-    if (phone.isEmpty || password.isEmpty || (!_isLogin && name.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пожалуйста, заполните все поля')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
+    FocusScope.of(context).unfocus(); // Скрываем клавиатуру
 
     try {
-      final docRef = FirebaseFirestore.instance.collection('clients').doc(phone);
-      final clientDoc = await docRef.get();
+      final phone = _phoneController.text.trim();
+      final password = _passwordController.text.trim();
 
-      String? clientName;
+      if (phone.isEmpty || password.isEmpty) {
+        _showError('Заполните все обязательные поля');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Возвращаем наш железный префикс
+      final fullPhone = '+993$phone';
 
       if (_isLogin) {
-        // Логика входа
-        if (!clientDoc.exists) {
-          throw Exception('Пользователь не найден');
+        // --- ЛОГИКА ВХОДА ---
+        final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          if (data['password'].toString() == password) {
+            
+            // Сохраняем данные в память телефона
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('phone', fullPhone);
+            await prefs.setString('client_name', data['name'] ?? 'Клиент');
+            
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => HomeScreen()),
+              );
+            }
+          } else {
+            _showError('Неверный пароль');
+          }
+        } else {
+          _showError('Пользователь с таким номером не найден');
         }
-        if (clientDoc.data()?['password'] != password) {
-          throw Exception('Неверный пароль');
-        }
-        clientName = clientDoc.data()?['client_name'];
       } else {
-        // Логика регистрации
-        if (clientDoc.exists) {
-          throw Exception('Пользователь с таким номером уже существует');
+        // --- ЛОГИКА РЕГИСТРАЦИИ ---
+        final name = _nameController.text.trim();
+        final confirm = _confirmPasswordController.text.trim();
+
+        if (name.isEmpty || confirm.isEmpty) {
+          _showError('Заполните все поля для регистрации');
+          setState(() => _isLoading = false);
+          return;
         }
-        clientName = name;
-        await docRef.set({
-          'phone': phone,
-          'password': password,
-          'client_name': clientName,
-          'created_at': FieldValue.serverTimestamp(),
-        });
-      }
+        if (password != confirm) {
+          _showError('Пароли не совпадают!');
+          setState(() => _isLoading = false);
+          return;
+        }
+        if (password.length < 6) {
+          _showError('Пароль должен содержать минимум 6 символов');
+          setState(() => _isLoading = false);
+          return;
+        }
 
-      // Обязательно сохраняем имя пользователя в SharedPreferences под ключом 'client_name'
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('phone', phone);
-      if (clientName != null) {
-        await prefs.setString('client_name', clientName);
-      }
+        final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
+        if (doc.exists) {
+          _showError('Пользователь с таким номером уже зарегистрирован');
+        } else {
+          // Создаем нового пользователя
+          await FirebaseFirestore.instance.collection('clients').doc(fullPhone).set({
+            'name': name,
+            'phone': fullPhone,
+            'password': password,
+            'created_at': FieldValue.serverTimestamp(),
+          });
 
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+          // Сохраняем в память
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('phone', fullPhone);
+          await prefs.setString('client_name', name);
+
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => HomeScreen()),
+            );
+          }
+        }
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: ${e.toString()}')),
-      );
+      _showError('Системная ошибка: $e');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: TextStyle(color: Colors.white, fontSize: 16)),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_isLogin ? 'Вход' : 'Регистрация')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (!_isLogin)
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Ваше имя'),
+      backgroundColor: Colors.grey[50], // Приятный фон
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Icon(Icons.computer, size: 64, color: Colors.blueAccent),
+                    SizedBox(height: 24),
+                    Text(
+                      _isLogin ? 'Вход в систему' : 'Регистрация',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 32),
+                    
+                    // ПОЛЕ: ИМЯ (Только при регистрации)
+                    if (!_isLogin) ...[
+                      TextField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Ваше имя',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          prefixIcon: Icon(Icons.person),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                    ],
+
+                    // ПОЛЕ: ТЕЛЕФОН
+                    TextField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: 'Номер телефона',
+                        prefixText: '+993 ', // ВЕРНУЛИ ПРЕФИКС!
+                        prefixStyle: TextStyle(fontSize: 16, color: Colors.black87),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: Icon(Icons.phone),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // ПОЛЕ: ПАРОЛЬ
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: 'Пароль',
+                        hintText: 'Минимум 6 символов',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: Icon(Icons.lock),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // ПОЛЕ: ПОВТОР ПАРОЛЯ (Только при регистрации)
+                    if (!_isLogin) ...[
+                      TextField(
+                        controller: _confirmPasswordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Повторите пароль',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          prefixIcon: Icon(Icons.lock_outline),
+                        ),
+                      ),
+                    ],
+
+                    // КНОПКА ЗАБЫЛИ ПАРОЛЬ
+                    if (_isLogin)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () async {
+                            final url = Uri.parse('tel:+99360000000'); // Позже впишем твой номер
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(url);
+                            }
+                          },
+                          child: Text('Забыли пароль?'),
+                        ),
+                      ),
+                    
+                    SizedBox(height: _isLogin ? 8 : 24),
+
+                    // ГЛАВНАЯ КНОПКА
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: _isLoading ? null : _submit,
+                      child: _isLoading 
+                          ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                          : Text(_isLogin ? 'Войти' : 'Зарегистрироваться'),
+                    ),
+                    SizedBox(height: 16),
+
+                    // ПЕРЕКЛЮЧАТЕЛЬ ВХОД/РЕГИСТРАЦИЯ
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _isLogin = !_isLogin;
+                          _phoneController.clear();
+                          _passwordController.clear();
+                          _nameController.clear();
+                          _confirmPasswordController.clear();
+                        });
+                      },
+                      child: Text(
+                        _isLogin 
+                          ? 'Нет аккаунта? Зарегистрироваться' 
+                          : 'Уже есть аккаунт? Войти',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            if (!_isLogin) const SizedBox(height: 16),
-            TextField(
-              controller: _phoneController,
-              decoration: const InputDecoration(labelText: 'Телефон'),
-              keyboardType: TextInputType.phone,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(
-                labelText: 'Пароль',
-                hintText: 'минимум 6 символов', // Косметика для пароля
-              ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 24),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _submit,
-                    child: Text(_isLogin ? 'Войти' : 'Зарегистрироваться'),
-                  ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _isLogin = !_isLogin;
-                });
-              },
-              child: Text(_isLogin
-                  ? 'Нет аккаунта? Зарегистрироваться'
-                  : 'Уже есть аккаунт? Войти'),
-            ),
-          ],
+          ),
         ),
       ),
     );
