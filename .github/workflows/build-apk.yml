@@ -47,5 +47,5 @@ jobs:
         with:
           # Робот возьмет текст твоего коммита (например "база плюс профиль") и сделает его названием архива!
           name: mservice_crm_${{ github.event.head_commit.message }}
-          path: build/app/outputs/flutter-apk/mservice_crm.apk
+          path: build/app/outputs/flutter-apk/mservice_app.apk
 
