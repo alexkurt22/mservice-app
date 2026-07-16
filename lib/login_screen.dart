@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -19,7 +20,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _nameController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // Если этот номер не null, значит мы показываем экран проверки (StreamBuilder)
   String? _currentCheckingPhone;
 
   Future<void> _submit() async {
@@ -46,13 +46,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final fullPhone = '+993$rawPhone';
 
       if (_isLogin) {
-        // --- ЛОГИКА ВХОДА ---
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
         if (doc.exists) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['password'].toString() == password) {
-            
-            // Проверяем, подтвердил ли админ регистрацию
             if (data['is_approved'] == true) {
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('phone', fullPhone);
@@ -62,7 +59,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
               }
             } else {
-              // Если пароль верный, но не подтвержден - кидаем на экран ожидания/ошибки
               setState(() {
                 _currentCheckingPhone = fullPhone;
               });
@@ -74,7 +70,6 @@ class _LoginScreenState extends State<LoginScreen> {
           _showError('Пользователь не найден');
         }
       } else {
-        // --- ЛОГИКА РЕГИСТРАЦИИ ---
         final name = _nameController.text.trim();
         final confirm = _confirmPasswordController.text.trim();
 
@@ -96,7 +91,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
         
-        // Если номер есть, но он был отклонен админом ранее — разрешаем перезаписать
         if (doc.exists) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['is_approved'] == true || data['rejection_reason'] == null) {
@@ -106,7 +100,6 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
 
-        // Генерируем 4-значный код
         final String generatedCode = (Random().nextInt(9000) + 1000).toString();
 
         await FirebaseFirestore.instance.collection('clients').doc(fullPhone).set({
@@ -116,10 +109,9 @@ class _LoginScreenState extends State<LoginScreen> {
           'created_at': FieldValue.serverTimestamp(),
           'is_approved': false,
           'sms_code': generatedCode,
-          'rejection_reason': null, // Пустое поле означает "в ожидании"
+          'rejection_reason': null,
         });
 
-        // Переводим интерфейс в режим ожидания SMS
         setState(() {
           _currentCheckingPhone = fullPhone;
         });
@@ -148,7 +140,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (await canLaunchUrl(smsUri)) {
       await launchUrl(smsUri);
     } else {
-      // Резервный способ для некоторых Android устройств
       final Uri smsUriFallback = Uri.parse('sms:+99363644925?body=$code');
       if (await canLaunchUrl(smsUriFallback)) {
         await launchUrl(smsUriFallback);
@@ -156,7 +147,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- ЭКРАН СТАТУСА РЕГИСТРАЦИИ (ПОЯВЛЯЕТСЯ ВМЕСТО ФОРМЫ) ---
   Widget _buildVerificationScreen() {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('clients').doc(_currentCheckingPhone).snapshots(),
@@ -178,8 +168,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  
-                  // СЦЕНАРИЙ 1: АДМИН ОДОБРИЛ
                   if (isApproved) ...[
                     const Icon(Icons.check_circle, size: 80, color: Colors.green),
                     const SizedBox(height: 24),
@@ -188,23 +176,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     const Text('Ваш аккаунт успешно подтвержден.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.grey)),
                     const SizedBox(height: 32),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green[700],
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], padding: const EdgeInsets.symmetric(vertical: 16)),
                       onPressed: () async {
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.setString('phone', _currentCheckingPhone!);
                         await prefs.setString('client_name', data['name'] ?? 'Клиент');
-                        if (mounted) {
-                          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
-                        }
+                        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
                       },
                       child: const Text('ДАЛЕЕ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ] 
-                  
-                  // СЦЕНАРИЙ 2: АДМИН ОТКЛОНИЛ
                   else if (rejectionReason != null && rejectionReason.isNotEmpty) ...[
                     const Icon(Icons.cancel, size: 80, color: Colors.red),
                     const SizedBox(height: 24),
@@ -213,21 +194,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text('Введены неверные данные.\nПричина: $rejectionReason', textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.black87)),
                     const SizedBox(height: 32),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey[900],
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      onPressed: () {
-                        // Сбрасываем проверку, возвращаем на форму
-                        setState(() {
-                          _currentCheckingPhone = null;
-                        });
-                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
+                      onPressed: () => setState(() => _currentCheckingPhone = null),
                       child: const Text('ИЗМЕНИТЬ НОМЕР ТЕЛЕФОНА', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ] 
-                  
-                  // СЦЕНАРИЙ 3: ОЖИДАНИЕ СМС
                   else ...[
                     const Icon(Icons.mark_email_unread, size: 80, color: Colors.orange),
                     const SizedBox(height: 24),
@@ -246,10 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 32),
                     ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey[900],
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
                       onPressed: () => _sendSms(smsCode),
                       icon: const Icon(Icons.sms, color: Colors.white),
                       label: const Text('ОТПРАВИТЬ SMS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -258,7 +226,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     const CircularProgressIndicator(color: Colors.orange),
                     const SizedBox(height: 16),
                     const Text('Ожидание подтверждения администратором...', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-                    
                     const SizedBox(height: 32),
                     TextButton(
                       onPressed: () => setState(() => _currentCheckingPhone = null),
@@ -274,15 +241,10 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- СТАНДАРТНАЯ ФОРМА ВХОДА ---
   @override
   Widget build(BuildContext context) {
-    // Если есть номер для проверки, показываем экран статусов
     if (_currentCheckingPhone != null) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: _buildVerificationScreen(),
-      );
+      return Scaffold(backgroundColor: Colors.white, body: _buildVerificationScreen());
     }
 
     return Scaffold(
@@ -311,11 +273,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 48),
 
                 if (!_isLogin) ...[
-                  _buildTextField(_nameController, 'Ваше имя', Icons.person),
+                  _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.name),
                   const SizedBox(height: 16),
                 ],
 
-                _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 '),
+                _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 ', maxLength: 8),
                 const SizedBox(height: 16),
 
                 _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов'),
@@ -377,16 +339,19 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText}) {
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText, int? maxLength}) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
+      maxLength: maxLength,
+      inputFormatters: keyboardType == TextInputType.phone ? [FilteringTextInputFormatter.digitsOnly] : null,
       style: const TextStyle(fontSize: 16),
       decoration: InputDecoration(
         labelText: label,
         hintText: hintText,
         prefixText: prefixText,
+        counterText: '',
         prefixStyle: const TextStyle(fontSize: 16, color: Colors.black87),
         prefixIcon: Icon(icon, color: Colors.blueGrey[400]),
         filled: true,
@@ -398,4 +363,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
