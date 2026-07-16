@@ -45,6 +45,48 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 
+  // --- НОВЫЙ БЛОК: ОТРИСОВКА ИСТОРИИ ТОРГОВ ---
+  Widget _buildHistoryBlock(Map<String, dynamic> data) {
+    final history = data['history'] as List<dynamic>?;
+    if (history == null || history.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('История предложений:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blueGrey)),
+        const SizedBox(height: 8),
+        ...history.asMap().entries.map((entry) {
+          int round = entry.key + 1;
+          List<dynamic> oldOptions = entry.value['options'] ?? [];
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Раунд $round (Отклонено)', style: TextStyle(color: Colors.red[400], fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(height: 6),
+                ...oldOptions.map((opt) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '${opt['description']} — ${opt['price']} TMT',
+                    style: const TextStyle(color: Colors.grey, decoration: TextDecoration.lineThrough, fontSize: 13),
+                  ),
+                )).toList(),
+              ],
+            ),
+          );
+        }).toList(),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -171,6 +213,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 Text('Проблема: ${data['problem']}'),
                 const Divider(height: 24),
                 
+                _buildHistoryBlock(data), // <-- ДОБАВЛЕН ВЫВОД ИСТОРИИ
+
                 if (options != null) ...[
                   const Text('Мастер предложил варианты ремонта. Выберите подходящий:', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
                   const SizedBox(height: 8),
@@ -315,6 +359,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 const SizedBox(height: 8),
                 Text('Проблема: ${data['problem']}', style: TextStyle(color: Colors.blueGrey[800])),
                 const Divider(height: 24),
+                
+                _buildHistoryBlock(data), // <-- ДОБАВЛЕН ВЫВОД ИСТОРИИ
+
                 Row(
                   children: [
                     Icon(iconStatus, color: borderColor, size: 22),
@@ -400,6 +447,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 const SizedBox(height: 8),
                 Text('Проблема: ${data['problem']}', style: TextStyle(color: Colors.blueGrey[800])),
                 const Divider(height: 24),
+                
+                _buildHistoryBlock(data), // <-- ДОБАВЛЕН ВЫВОД ИСТОРИИ
+
                 Row(
                   children: [
                     Icon(Icons.cancel, size: 20, color: Colors.red[700]),
@@ -416,3 +466,4 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 }
+
