@@ -48,10 +48,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50], // Корпоративный светлый фон
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('Мои заказы', style: TextStyle(fontSize: 18)),
-        backgroundColor: Colors.blueGrey[900], // Темная строгая шапка
+        backgroundColor: Colors.blueGrey[900],
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -85,7 +85,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
                 final docs = snapshot.data!.docs.toList();
                 
-                // Сортировка: awaiting_approval наверх, затем по created_at (по убыванию)
                 docs.sort((a, b) {
                   final dataA = a.data() as Map<String, dynamic>;
                   final dataB = b.data() as Map<String, dynamic>;
@@ -171,14 +170,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 const SizedBox(height: 8),
                 Text('Проблема: ${data['problem']}'),
                 const Divider(height: 24),
-                Row(
-                  children: const [
-                    Icon(Icons.warning_amber_rounded, color: Colors.deepOrange),
-                    SizedBox(width: 8),
-                    Text('Требуется согласование!', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange, fontSize: 16)),
-                  ],
-                ),
-                const SizedBox(height: 12),
                 
                 if (options != null) ...[
                   const Text('Мастер предложил варианты ремонта. Выберите подходящий:', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
@@ -216,7 +207,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   Text('Стоимость ремонта: ${data['price']} TMT', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                 ],
                 
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                const Text('Ваше решение:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                const SizedBox(height: 12),
+
                 Row(
                   children: [
                     Expanded(
@@ -266,10 +260,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[300],
-                          foregroundColor: Colors.black87,
+                          backgroundColor: Colors.red[50], // Активный красный фон
+                          foregroundColor: Colors.red[700], // Красный текст
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(color: Colors.red.shade200), // Красная окантовка
+                          ),
                           elevation: 0,
                         ),
                         onPressed: () async {
@@ -298,7 +295,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         final isCompleted = status == 'completed';
         final color = isCompleted ? Colors.green.shade50 : Colors.blue.shade50;
         final borderColor = isCompleted ? Colors.green : Colors.blue;
-        final statusText = isCompleted ? 'Статус: Готово к выдаче! 🎉' : 'Статус: В работе (Ремонтируется)';
+        final statusText = isCompleted ? 'Статус: Выполнено' : 'Статус: Выполняется';
         final iconStatus = isCompleted ? Icons.check_circle : Icons.handyman;
         
         return Card(
@@ -419,4 +416,3 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 }
-
