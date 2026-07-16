@@ -11,7 +11,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _problemController = TextEditingController();
   bool _isLoading = false;
 
-  // Восстанавливаем список категорий
   final List<String> _categories = [
     'Компьютер / ПК',
     'Ноутбук',
@@ -85,7 +84,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Новый заказ'),
-        backgroundColor: Colors.blueGrey[800],
+        backgroundColor: Colors.blueGrey[900],
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
@@ -101,7 +100,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[400]!),
+                border: Border.all(color: Colors.grey[300]!),
                 borderRadius: BorderRadius.circular(8),
                 color: Colors.white,
               ),
@@ -126,15 +125,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'Дополнительно / Описание',
+              'Дополнительно',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _problemController,
-              maxLines: 5,
+              maxLines: 8, // Сделано больше!
               decoration: InputDecoration(
-                hintText: 'Опишите, что случилось с техникой...',
+                hintText: 'Описание', // Изменено
                 filled: true,
                 fillColor: Colors.grey[50],
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -147,7 +146,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             const SizedBox(height: 32),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueGrey[800],
+                backgroundColor: Colors.blueGrey[900],
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
