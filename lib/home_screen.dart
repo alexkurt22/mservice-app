@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,11 +19,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String? _phone;
   String? _clientName;
+  StreamSubscription<DocumentSnapshot>? _userSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _userSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -34,8 +42,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_phone != null) {
       _setupPushNotifications();
+      _listenToBanHammer(); // Запускаем шпиона безопасности
     }
   }
+
+  // --- ТОТ САМЫЙ "ШПИОН" БЕЗОПАСНОСТИ ---
+  void _listenToBanHammer() {
+    _userSubscription = FirebaseFirestore.instance.collection('clients').doc(_phone).snapshots().listen((snapshot) {
+      if (!snapshot.exists) {
+        // Если документа больше нет в базе (админ удалил)
+        _forceLogout('Ваш аккаунт был удален администратором.');
+      } else {
+        // Если документ есть, но админ снял галочку "одобрено"
+        final data = snapshot.data() as Map<String, dynamic>;
+        if (data['is_approved'] == false) {
+           _forceLogout('Ваш доступ к приложению приостановлен.');
+        }
+      }
+    });
+  }
+
+  Future<void> _forceLogout(String message) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); // Стираем кэш
+    _userSubscription?.cancel(); // Убиваем слушателя
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red[800], duration: const Duration(seconds: 5)),
+    );
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+  }
+  // ----------------------------------------
 
   Future<void> _setupPushNotifications() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -64,11 +102,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+    _userSubscription?.cancel();
     if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
-    );
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
   }
 
   Future<bool> _onWillPop() async {
@@ -97,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _callAdmin() async {
-    final url = Uri.parse('tel:+99363644925'); // Твой номер
+    final url = Uri.parse('tel:+99363644925');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     }
@@ -181,7 +217,6 @@ class _HomeScreenState extends State<HomeScreen> {
               
               const SizedBox(height: 48),
               
-              // Второстепенная кнопка связи с админом (внизу)
               Center(
                 child: TextButton.icon(
                   style: TextButton.styleFrom(
@@ -224,4 +259,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
