@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Для выхода из приложения
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:url_launcher/url_launcher.dart'; // Для звонков
+import 'package:url_launcher/url_launcher.dart';
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
@@ -29,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _phone = prefs.getString('phone');
-      _clientName = prefs.getString('client_name'); // Достаем имя клиента
+      _clientName = prefs.getString('client_name');
     });
 
     if (_phone != null) {
@@ -71,7 +71,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ЛОГИКА ПОДТВЕРЖДЕНИЯ ВЫХОДА ИЗ ПРИЛОЖЕНИЯ ---
   Future<bool> _onWillPop() async {
     final shouldPop = await showDialog<bool>(
       context: context,
@@ -87,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop(true);
-              SystemNavigator.pop(); // Системное закрытие приложения
+              SystemNavigator.pop();
             },
             child: const Text('Да', style: TextStyle(color: Colors.red)),
           ),
@@ -97,9 +96,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return shouldPop ?? false;
   }
 
-  // --- ЛОГИКА ЗВОНКА АДМИНИСТРАТОРУ ---
-  Future<void> _callMaster() async {
-    final url = Uri.parse('tel:+99360000000'); // Здесь потом впишем твой реальный номер
+  Future<void> _callAdmin() async {
+    final url = Uri.parse('tel:+99363644925'); // Твой номер
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     }
@@ -111,7 +109,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // PopScope защищает от случайного выхода системной кнопкой "Назад"
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
@@ -119,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
         await _onWillPop();
       },
       child: Scaffold(
-        backgroundColor: Colors.grey[50], // Строгий фон
+        backgroundColor: Colors.grey[50],
         appBar: AppBar(
           backgroundColor: Colors.blueGrey[900],
           foregroundColor: Colors.white,
@@ -142,7 +139,6 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const SizedBox(height: 8),
               
-              // 1. КНОПКА МОИ ЗАКАЗЫ (С БЕЙДЖИКАМИ)
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('orders')
@@ -165,12 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.list_alt,
                       iconColor: Colors.blueGrey[700]!,
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const MyOrdersScreen(),
-                          ),
-                        );
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
                       },
                     ),
                   );
@@ -178,30 +169,29 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 16),
               
-              // 2. КНОПКА ОФОРМИТЬ ЗАКАЗ
               _buildMenuCard(
                 title: 'Оформить заказ',
                 subtitle: 'Создать новый заказ на ремонт',
                 icon: Icons.add_circle_outline,
                 iconColor: Colors.blueGrey[700]!,
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CreateOrderScreen(),
-                    ),
-                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen()));
                 },
               ),
-              const SizedBox(height: 16),
-
-              // 3. КНОПКА ВЫЗОВ МАСТЕРА
-              _buildMenuCard(
-                title: 'Хочу вызвать мастера',
-                subtitle: 'Связаться с администратором',
-                icon: Icons.support_agent,
-                iconColor: Colors.green[700]!,
-                onTap: _callMaster,
+              
+              const SizedBox(height: 48),
+              
+              // Второстепенная кнопка связи с админом (внизу)
+              Center(
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.blueGrey[400],
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  onPressed: _callAdmin,
+                  icon: const Icon(Icons.support_agent, size: 20),
+                  label: const Text('Связаться с администратором', style: TextStyle(fontSize: 14)),
+                ),
               ),
             ],
           ),
@@ -210,14 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ШАБЛОН ДЛЯ КРАСИВЫХ КНОПОК ---
-  Widget _buildMenuCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color iconColor,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -229,10 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ListTile(
             leading: Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: iconColor.withOpacity(0.1), shape: BoxShape.circle),
               child: Icon(icon, size: 32, color: iconColor),
             ),
             title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
