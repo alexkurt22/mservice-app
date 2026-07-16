@@ -23,49 +23,50 @@ class _LoginScreenState extends State<LoginScreen> {
     FocusScope.of(context).unfocus();
 
     try {
-      final phone = _phoneController.text.trim();
+      // Убираем случайные пробелы, если клиент их ввел
+      final rawPhone = _phoneController.text.trim().replaceAll(' ', '');
       final password = _passwordController.text.trim();
 
-      if (phone.isEmpty || password.isEmpty) {
+      if (rawPhone.isEmpty || password.isEmpty) {
         _showError('Заполните все обязательные поля');
         setState(() => _isLoading = false);
         return;
       }
 
-      // Твой стандартный префикс
-      final fullPhone = '+993$phone';
+      // --- ПРОВЕРКА КОДА ОПЕРАТОРА И ДЛИНЫ НОМЕРА ---
+      final validPrefixes = ['60', '61', '62', '63', '64', '65', '71', '72'];
+      if (rawPhone.length != 8 || !validPrefixes.any((p) => rawPhone.startsWith(p))) {
+        _showError('Введите 8 цифр корректного номера (коды: 60-65, 71, 72)');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final fullPhone = '+993$rawPhone';
 
       if (_isLogin) {
-        // --- ТВОЙ РАБОЧИЙ ВХОД ---
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
         if (doc.exists) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['password'].toString() == password) {
-            
-            // Аккуратно сохраняем имя в память, не трогая логику проверки
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('phone', fullPhone);
             await prefs.setString('client_name', data['name'] ?? 'Клиент');
             
             if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => HomeScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
             }
           } else {
             _showError('Неверный пароль');
           }
         } else {
-          _showError('Пользователь с таким номером не найден');
+          _showError('Пользователь не найден');
         }
       } else {
-        // --- ТВОЯ РАБОЧАЯ РЕГИСТРАЦИЯ ---
         final name = _nameController.text.trim();
         final confirm = _confirmPasswordController.text.trim();
 
         if (name.isEmpty || confirm.isEmpty) {
-          _showError('Заполните все поля для регистрации');
+          _showError('Заполните все поля');
           setState(() => _isLoading = false);
           return;
         }
@@ -82,9 +83,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
         if (doc.exists) {
-          _showError('Пользователь с таким номером уже зарегистрирован');
+          _showError('Пользователь уже зарегистрирован');
         } else {
-          // Создание документа в исходном стабильном формате
           await FirebaseFirestore.instance.collection('clients').doc(fullPhone).set({
             'name': name,
             'phone': fullPhone,
@@ -97,15 +97,12 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString('client_name', name);
 
           if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => HomeScreen()),
-            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
           }
         }
       }
     } catch (e) {
-      _showError('Системная ошибка: $e');
+      _showError('Ошибка: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -113,76 +110,50 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.redAccent,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: Colors.red[800]),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.computer, size: 64, color: Colors.blueGrey),
-                const SizedBox(height: 24),
+                Icon(Icons.business_center, size: 48, color: Colors.blueGrey[900]),
+                const SizedBox(height: 16),
                 Text(
-                  _isLogin ? 'Вход в систему' : 'Регистрация',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  'M-SERVICE',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.blueGrey[900], letterSpacing: 1.5),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 32),
-                
+                const SizedBox(height: 8),
+                Text(
+                  _isLogin ? 'ВХОД В СИСТЕМУ' : 'РЕГИСТРАЦИЯ',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1.0),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 48),
+
                 if (!_isLogin) ...[
-                  TextField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Ваше имя',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  _buildTextField(_nameController, 'Ваше имя', Icons.person),
                   const SizedBox(height: 16),
                 ],
 
-                TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Номер телефона',
-                    prefixText: '+993 ',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 '),
                 const SizedBox(height: 16),
 
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Пароль',
-                    hintText: 'минимум 6 символов',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов'),
                 const SizedBox(height: 16),
 
                 if (!_isLogin) ...[
-                  TextField(
-                    controller: _confirmPasswordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Повторите пароль',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true),
                 ],
 
                 if (_isLogin)
@@ -190,22 +161,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () async {
-                        final url = Uri.parse('tel:+99360000000'); // Твой номер поддержки
-                        if (await canLaunchUrl(url)) {
-                          await launchUrl(url);
-                        }
+                        final url = Uri.parse('tel:+99363644925'); // Твой номер
+                        if (await canLaunchUrl(url)) await launchUrl(url);
                       },
-                      child: const Text('Забыли пароль?'),
+                      child: Text('Забыли пароль?', style: TextStyle(color: Colors.blueGrey[700])),
                     ),
                   ),
 
+                SizedBox(height: _isLogin ? 16 : 32),
+
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueGrey[900],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
                   onPressed: _isLoading ? null : _submit,
                   child: _isLoading 
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                      : Text(_isLogin ? 'Войти' : 'Зарегистрироваться'),
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                      : Text(_isLogin ? 'ВОЙТИ' : 'ОТПРАВИТЬ', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
                 ),
+                const SizedBox(height: 24),
 
                 TextButton(
                   onPressed: () {
@@ -217,7 +195,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       _confirmPasswordController.clear();
                     });
                   },
-                  child: Text(_isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'),
+                  child: Text(
+                    _isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти',
+                    style: TextStyle(color: Colors.blueGrey[600], fontSize: 15),
+                  ),
                 ),
               ],
             ),
@@ -226,5 +207,25 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-}
 
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText}) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      style: const TextStyle(fontSize: 16),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        prefixText: prefixText,
+        prefixStyle: const TextStyle(fontSize: 16, color: Colors.black87),
+        prefixIcon: Icon(icon, color: Colors.blueGrey[400]),
+        filled: true,
+        fillColor: Colors.grey[100],
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.blueGrey)),
+      ),
+    );
+  }
+}
