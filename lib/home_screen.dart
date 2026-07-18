@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
-import 'screens/support_chat_screen.dart'; // ❗ ИСПРАВЛЕННЫЙ ИМПОРТ (добавили папку screens/)
+import 'screens/support_chat_screen.dart'; // ❗ Импорт экрана чата
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -43,15 +43,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_phone != null) {
       _setupPushNotifications();
-      _listenToBanHammer(); 
+      _listenToBanHammer(); // Запускаем шпиона безопасности
     }
   }
 
+  // --- ТОТ САМЫЙ "ШПИОН" БЕЗОПАСНОСТИ ---
   void _listenToBanHammer() {
     _userSubscription = FirebaseFirestore.instance.collection('clients').doc(_phone).snapshots().listen((snapshot) {
       if (!snapshot.exists) {
+        // Если документа больше нет в базе (админ удалил)
         _forceLogout('Ваш аккаунт был удален администратором.');
       } else {
+        // Если документ есть, но админ снял галочку "одобрено"
         final data = snapshot.data() as Map<String, dynamic>;
         if (data['is_approved'] == false) {
            _forceLogout('Ваш доступ к приложению приостановлен.');
@@ -62,8 +65,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _forceLogout(String message) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); 
-    _userSubscription?.cancel(); 
+    await prefs.clear(); // Стираем кэш
+    _userSubscription?.cancel(); // Убиваем слушателя
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -71,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
   }
+  // ----------------------------------------
 
   Future<void> _setupPushNotifications() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -118,8 +122,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           TextButton(
             onPressed: () {
-               Navigator.of(context).pop(true);
-               SystemNavigator.pop();
+              Navigator.of(context).pop(true);
+              SystemNavigator.pop();
             },
             child: const Text('Да', style: TextStyle(color: Colors.red)),
           ),
@@ -129,25 +133,44 @@ class _HomeScreenState extends State<HomeScreen> {
     return shouldPop ?? false;
   }
 
+  Future<void> _callAdmin() async {
+    final url = Uri.parse('tel:+99363644925');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    if (_phone == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        await _onWillPop();
+      },
       child: Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
-          backgroundColor: Colors.blue[800],
+          backgroundColor: Colors.blueGrey[900],
           foregroundColor: Colors.white,
-          title: Text('Привет, ${_clientName ?? 'Клиент'}!', style: const TextStyle(fontWeight: FontWeight.bold)),
+          title: Text(
+            'Добро пожаловать, ${_clientName ?? "Клиент"}!',
+            style: const TextStyle(fontSize: 18),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.logout),
               onPressed: _logout,
-              tooltip: 'Выйти',
+              tooltip: 'Сменить аккаунт',
             ),
           ],
         ),
         
+        // ❗ ДОБАВЛЕНА КНОПКА ЧАТА ❗
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
@@ -157,82 +180,92 @@ class _HomeScreenState extends State<HomeScreen> {
           label: const Text('Поддержка', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
 
-        body: ListView(
+        body: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
-          children: [
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen()));
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('orders')
+                    .where('phone', isEqualTo: _phone)
+                    .where('has_unread_update', isEqualTo: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  int unreadCount = 0;
+                  if (snapshot.hasData) {
+                    unreadCount = snapshot.data!.docs.length;
+                  }
+
+                  return Badge(
+                    isLabelVisible: unreadCount > 0,
+                    label: Text(unreadCount.toString()),
+                    offset: const Offset(-4, -4),
+                    child: _buildMenuCard(
+                      title: 'Мои заказы',
+                      subtitle: 'История и согласование статуса',
+                      icon: Icons.list_alt,
+                      iconColor: Colors.blueGrey[700]!,
+                      onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+                      },
+                    ),
+                  );
                 },
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.blue[100],
-                        child: Icon(Icons.add_circle_outline, size: 32, color: Colors.blue[800]),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Оставить заявку', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey[900])),
-                            const SizedBox(height: 4),
-                            Text('Заявка на ремонт или обслуживание', style: TextStyle(color: Colors.blueGrey[400], fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.arrow_forward_ios, color: Colors.blueGrey),
-                    ],
+              ),
+              const SizedBox(height: 16),
+              
+              _buildMenuCard(
+                title: 'Оформить заказ',
+                subtitle: 'Создать новый заказ на ремонт',
+                icon: Icons.add_circle_outline,
+                iconColor: Colors.blueGrey[700]!,
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen()));
+                },
+              ),
+              
+              const SizedBox(height: 48),
+              
+              Center(
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.blueGrey[400],
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
+                  onPressed: _callAdmin,
+                  icon: const Icon(Icons.support_agent, size: 20),
+                  label: const Text('Связаться с администратором', style: TextStyle(fontSize: 14)),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: iconColor.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(icon, size: 32, color: iconColor),
             ),
-            
-            const SizedBox(height: 16),
-            
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.orange[100],
-                        child: Icon(Icons.history, size: 32, color: Colors.orange[800]),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Мои ремонты', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey[900])),
-                            const SizedBox(height: 4),
-                            Text('История и статус ремонтов', style: TextStyle(color: Colors.blueGrey[400], fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.arrow_forward_ios, color: Colors.blueGrey),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            
-          ],
+            title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+            subtitle: Text(subtitle, style: TextStyle(color: Colors.blueGrey[400])),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          ),
         ),
       ),
     );
