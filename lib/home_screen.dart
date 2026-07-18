@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
-import 'screens/support_chat_screen.dart'; // ❗ Импорт экрана чата
+import 'screens/support_chat_screen.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -43,18 +43,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_phone != null) {
       _setupPushNotifications();
-      _listenToBanHammer(); // Запускаем шпиона безопасности
+      _listenToBanHammer(); 
     }
   }
 
-  // --- ТОТ САМЫЙ "ШПИОН" БЕЗОПАСНОСТИ ---
   void _listenToBanHammer() {
     _userSubscription = FirebaseFirestore.instance.collection('clients').doc(_phone).snapshots().listen((snapshot) {
       if (!snapshot.exists) {
-        // Если документа больше нет в базе (админ удалил)
         _forceLogout('Ваш аккаунт был удален администратором.');
       } else {
-        // Если документ есть, но админ снял галочку "одобрено"
         final data = snapshot.data() as Map<String, dynamic>;
         if (data['is_approved'] == false) {
            _forceLogout('Ваш доступ к приложению приостановлен.');
@@ -65,8 +62,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _forceLogout(String message) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // Стираем кэш
-    _userSubscription?.cancel(); // Убиваем слушателя
+    await prefs.clear(); 
+    _userSubscription?.cancel(); 
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -74,7 +71,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
   }
-  // ----------------------------------------
 
   Future<void> _setupPushNotifications() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -170,14 +166,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         
-        // ❗ ДОБАВЛЕНА КНОПКА ЧАТА ❗
+        // ❗ НОВЫЙ СТРОГИЙ ДИЗАЙН КНОПКИ ЧАТА ❗
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
           },
-          backgroundColor: Colors.blue[800],
-          icon: const Icon(Icons.chat_bubble, color: Colors.white),
-          label: const Text('Поддержка', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.blueGrey[900], // В цвет шапки
+          elevation: 4,
+          icon: const Icon(Icons.support_agent, color: Colors.orangeAccent), // Оранжевый акцент
+          label: const Text('Чат с мастером', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
         ),
 
         body: SingleChildScrollView(
@@ -236,8 +233,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                   onPressed: _callAdmin,
-                  icon: const Icon(Icons.support_agent, size: 20),
-                  label: const Text('Связаться с администратором', style: TextStyle(fontSize: 14)),
+                  icon: const Icon(Icons.call, size: 20),
+                  label: const Text('Позвонить администратору', style: TextStyle(fontSize: 14)),
                 ),
               ),
             ],
