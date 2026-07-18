@@ -21,15 +21,13 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     _initChat();
   }
 
-  // Инициализация чата (ищем существующий или создаем новый)
   Future<void> _initChat() async {
     final prefs = await SharedPreferences.getInstance();
-    final phone = prefs.getString('phone'); // Берем номер клиента из памяти
+    final phone = prefs.getString('phone'); 
     if (phone == null) return;
 
     setState(() => _myPhone = phone);
 
-    // Ищем, есть ли уже комната с этим клиентом
     final query = await FirebaseFirestore.instance.collection('chat_rooms')
         .where('type', isEqualTo: 'private')
         .where('participants', arrayContains: phone)
@@ -38,9 +36,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     if (query.docs.isNotEmpty) {
       setState(() => _roomId = query.docs.first.id);
     } else {
-      // Если клиент пишет первым, создаем комнату
       List<String> parts = ['admin', phone];
-      parts.sort(); // Сортируем для универсального ID
+      parts.sort(); 
       final newRoomId = 'private_${parts[0]}_${parts[1]}';
       
       await FirebaseFirestore.instance.collection('chat_rooms').doc(newRoomId).set({
@@ -63,7 +60,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       'text': text,
       'sender_phone': _myPhone,
       'created_at': FieldValue.serverTimestamp(),
-      'is_read': false, // Новое сообщение не прочитано админом
+      'is_read': false,
     });
     
     await FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).update({
@@ -77,9 +74,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Чат с поддержкой'), 
-        backgroundColor: Colors.blue[800], 
-        foregroundColor: Colors.white
+        title: const Text('Чат с мастером'), // Более солидное название
+        backgroundColor: Colors.blueGrey[900], // Цвет как на главном экране
+        foregroundColor: Colors.white,
       ),
       body: _roomId == null 
         ? const Center(child: CircularProgressIndicator())
@@ -100,10 +97,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                     
                     return ListView.builder(
                       reverse: true,
-                      padding: EdgeInsets.only(
-                        top: 10,
-                        bottom: MediaQuery.of(context).padding.bottom + 80.0
-                      ),
+                      padding: EdgeInsets.only(top: 10, bottom: MediaQuery.of(context).padding.bottom + 80.0),
                       itemCount: messages.length,
                       itemBuilder: (ctx, i) {
                         final data = messages[i].data() as Map<String, dynamic>;
@@ -111,8 +105,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         final Timestamp? ts = data['created_at'] as Timestamp?;
                         final DateTime dt = ts?.toDate() ?? DateTime.now();
                         
-                        // ❗ МАГИЯ СИНИХ ГАЛОЧЕК ❗
-                        // Если сообщение не мое и оно не прочитано — помечаем как прочитанное!
                         if (!isMe && data['is_read'] == false) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             messages[i].reference.update({'is_read': true});
@@ -142,22 +134,29 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: isMe ? Colors.blue[600] : Colors.white,
+                                  // ❗ СВЕТЛО-ГОЛУБОЙ ДЛЯ СВОИХ, БЕЛЫЙ ДЛЯ ЧУЖИХ
+                                  color: isMe ? Colors.blue[50] : Colors.white,
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
                                 ),
                                 child: Column(
                                   crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                                   children: [
-                                    Text(data['text'], style: TextStyle(fontSize: 16, color: isMe ? Colors.white : Colors.black87)),
+                                    // ❗ ТЕКСТ ВСЕГДА ТЕМНЫЙ ДЛЯ ЧИТАЕМОСТИ
+                                    Text(data['text'], style: const TextStyle(fontSize: 16, color: Colors.black87)),
                                     const SizedBox(height: 4),
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(DateFormat('HH:mm').format(dt), style: TextStyle(fontSize: 11, color: isMe ? Colors.blue[100] : Colors.grey)),
+                                        Text(DateFormat('HH:mm').format(dt), style: const TextStyle(fontSize: 11, color: Colors.grey)),
                                         if (isMe) ...[
                                           const SizedBox(width: 4),
-                                          Icon(Icons.done_all, size: 14, color: data['is_read'] == true ? Colors.lightBlueAccent : Colors.blue[200]),
+                                          // ❗ ИДЕАЛЬНЫЕ ГАЛОЧКИ КАК В ТЕЛЕГРАМ
+                                          Icon(
+                                            data['is_read'] == true ? Icons.done_all : Icons.check, 
+                                            size: 14, 
+                                            color: data['is_read'] == true ? Colors.blue[600] : Colors.grey
+                                          ),
                                         ]
                                       ],
                                     ),
@@ -182,7 +181,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         child: TextField(
                           controller: _controller, 
                           decoration: InputDecoration(
-                            hintText: 'Напишите администратору...', 
+                            hintText: 'Напишите мастеру...', 
                             filled: true,
                             fillColor: Colors.white,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -193,7 +192,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                       const SizedBox(width: 8),
                       CircleAvatar(
                         radius: 24,
-                        backgroundColor: Colors.blue[800],
+                        backgroundColor: Colors.blueGrey[900], // Кнопка отправки тоже строгая
                         child: IconButton(icon: const Icon(Icons.send, color: Colors.white), onPressed: _sendMessage),
                       ),
                     ],
