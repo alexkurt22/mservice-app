@@ -52,7 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- ЛОГИКА ЗВУКА ПРИ НОВОМ СООБЩЕНИИ ---
   void _listenToNewMessages() {
     _chatSubscription = FirebaseFirestore.instance.collection('chat_rooms')
         .where('participants', arrayContains: _phone)
@@ -60,9 +59,9 @@ class _HomeScreenState extends State<HomeScreen> {
       for (var change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.modified || change.type == DocumentChangeType.added) {
           final data = change.doc.data() as Map<String, dynamic>;
-          
-          if (data['has_unread'] == true && data['last_sender'] != _phone) {
-            // ❗ ИСПРАВЛЕНИЕ: Добавлены круглые скобки () для версии 4.0.0+
+          // ❗ ТЕПЕРЬ СЛУШАЕМ СЧЕТЧИК unread_count
+          int unreadCount = data['unread_count'] as int? ?? 0;
+          if (unreadCount > 0 && data['last_sender'] != _phone) {
             FlutterRingtonePlayer().playNotification(); 
             HapticFeedback.heavyImpact(); 
           }
@@ -183,19 +182,20 @@ class _HomeScreenState extends State<HomeScreen> {
               .where('participants', arrayContains: _phone)
               .snapshots(),
           builder: (context, snapshot) {
-            int unreadChats = 0;
+            int totalUnreadMessages = 0; // ❗ СЧИТАЕМ СООБЩЕНИЯ
             if (snapshot.hasData) {
               for (var doc in snapshot.data!.docs) {
                 final data = doc.data() as Map<String, dynamic>;
-                if (data['has_unread'] == true && data['last_sender'] != _phone) {
-                  unreadChats++;
+                int count = data['unread_count'] as int? ?? 0;
+                if (count > 0 && data['last_sender'] != _phone) {
+                  totalUnreadMessages += count;
                 }
               }
             }
 
             return Badge(
-              isLabelVisible: unreadChats > 0,
-              label: Text(unreadChats.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              isLabelVisible: totalUnreadMessages > 0,
+              label: Text(totalUnreadMessages.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               backgroundColor: Colors.red,
               offset: const Offset(-4, -4),
               child: FloatingActionButton.extended(
@@ -302,3 +302,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
