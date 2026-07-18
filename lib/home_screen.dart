@@ -5,10 +5,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart'; // ❗ ИМПОРТ ЗВУКА
+
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
-import 'screens/support_chat_screen.dart'; 
+import 'screens/support_chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -21,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _phone;
   String? _clientName;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
+  StreamSubscription<QuerySnapshot>? _chatSubscription; // ❗ Слушатель чатов
 
   @override
   void initState() {
@@ -31,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _userSubscription?.cancel();
+    _chatSubscription?.cancel();
     super.dispose();
   }
 
@@ -44,7 +48,26 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_phone != null) {
       _setupPushNotifications();
       _listenToBanHammer(); 
+      _listenToNewMessages(); // ❗ Включаем радар новых сообщений
     }
+  }
+
+  // --- ЛОГИКА ЗВУКА ПРИ НОВОМ СООБЩЕНИИ ---
+  void _listenToNewMessages() {
+    _chatSubscription = FirebaseFirestore.instance.collection('chat_rooms')
+        .where('participants', arrayContains: _phone)
+        .snapshots().listen((snapshot) {
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.modified || change.type == DocumentChangeType.added) {
+          final data = change.doc.data() as Map<String, dynamic>;
+          // Если пришло сообщение не от нас и оно не прочитано
+          if (data['has_unread'] == true && data['last_sender'] != _phone) {
+            FlutterRingtonePlayer.playNotification(); // Системный звук
+            HapticFeedback.heavyImpact(); // Сильная вибрация
+          }
+        }
+      }
+    });
   }
 
   void _listenToBanHammer() {
@@ -64,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear(); 
     _userSubscription?.cancel(); 
+    _chatSubscription?.cancel();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -83,23 +107,14 @@ class _HomeScreenState extends State<HomeScreen> {
         SetOptions(merge: true),
       );
     }
-
     await messaging.subscribeToTopic('all_users');
-
-    messaging.onTokenRefresh.listen((newToken) async {
-      if (_phone != null) {
-        await FirebaseFirestore.instance.collection('clients').doc(_phone).set(
-          {'fcm_token': newToken},
-          SetOptions(merge: true),
-        );
-      }
-    });
   }
 
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     _userSubscription?.cancel();
+    _chatSubscription?.cancel();
     if (!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
   }
@@ -158,23 +173,42 @@ class _HomeScreenState extends State<HomeScreen> {
             style: const TextStyle(fontSize: 18),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: _logout,
-              tooltip: 'Сменить аккаунт',
-            ),
+            IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Сменить аккаунт'),
           ],
         ),
         
-        // ❗ НОВЫЙ СТРОГИЙ ДИЗАЙН КНОПКИ ЧАТА ❗
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
+        // ❗ БЕЙДЖИК С НЕПРОЧИТАННЫМИ НА КНОПКЕ ЧАТА ❗
+        floatingActionButton: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance.collection('chat_rooms')
+              .where('participants', arrayContains: _phone)
+              .snapshots(),
+          builder: (context, snapshot) {
+            int unreadChats = 0;
+            if (snapshot.hasData) {
+              for (var doc in snapshot.data!.docs) {
+                final data = doc.data() as Map<String, dynamic>;
+                if (data['has_unread'] == true && data['last_sender'] != _phone) {
+                  unreadChats++;
+                }
+              }
+            }
+
+            return Badge(
+              isLabelVisible: unreadChats > 0,
+              label: Text(unreadChats.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              backgroundColor: Colors.red,
+              offset: const Offset(-4, -4),
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
+                },
+                backgroundColor: Colors.blueGrey[900],
+                elevation: 4,
+                icon: const Icon(Icons.support_agent, color: Colors.orangeAccent),
+                label: const Text('Чат с мастером', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ),
+            );
           },
-          backgroundColor: Colors.blueGrey[900], // В цвет шапки
-          elevation: 4,
-          icon: const Icon(Icons.support_agent, color: Colors.orangeAccent), // Оранжевый акцент
-          label: const Text('Чат с мастером', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
         ),
 
         body: SingleChildScrollView(
