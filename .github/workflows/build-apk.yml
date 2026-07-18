@@ -35,7 +35,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # ❗ НАШ МАГИЧЕСКИЙ БЛОК: ИСПРАВЛЯЕТ ВЕРСИИ ANDROID SDK ❗
       - name: Fix Android SDK versions
         run: |
           find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' {} +
@@ -44,6 +43,12 @@ jobs:
           sed -i 's/targetSdk = 33/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
+
+      # ❗ МАГИЯ БЕЗОПАСНОСТИ: Внедряем ключ пушей из сейфа прямо перед сборкой ❗
+      - name: Inject Secret Keys
+        run: |
+          mkdir -p assets
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > assets/firebase_credentials.json
 
       - name: Build APK
         run: flutter build apk --release
