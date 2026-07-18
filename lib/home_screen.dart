@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
-import 'support_chat_screen.dart'; // ❗ ДОБАВЛЕН ИМПОРТ ЧАТА
+import 'screens/support_chat_screen.dart'; // ❗ ИСПРАВЛЕННЫЙ ИМПОРТ (добавили папку screens/)
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -43,18 +43,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_phone != null) {
       _setupPushNotifications();
-      _listenToBanHammer(); // Запускаем шпиона безопасности
+      _listenToBanHammer(); 
     }
   }
 
-  // --- ТОТ САМЫЙ "ШПИОН" БЕЗОПАСНОСТИ ---
   void _listenToBanHammer() {
     _userSubscription = FirebaseFirestore.instance.collection('clients').doc(_phone).snapshots().listen((snapshot) {
       if (!snapshot.exists) {
-        // Если документа больше нет в базе (админ удалил)
         _forceLogout('Ваш аккаунт был удален администратором.');
       } else {
-        // Если документ есть, но админ снял галочку "одобрено"
         final data = snapshot.data() as Map<String, dynamic>;
         if (data['is_approved'] == false) {
            _forceLogout('Ваш доступ к приложению приостановлен.');
@@ -65,8 +62,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _forceLogout(String message) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // Стираем кэш
-    _userSubscription?.cancel(); // Убиваем слушателя
+    await prefs.clear(); 
+    _userSubscription?.cancel(); 
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -74,7 +71,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
   }
-  // ----------------------------------------
 
   Future<void> _setupPushNotifications() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -137,7 +133,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: _onWillPop,
-      // 👇 ВОТ ОН - ТОТ САМЫЙ SCAFFOLD!
       child: Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
@@ -153,7 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         
-        // 👇 А ВОТ И КНОПКА ЧАТА, ВСТАВЛЕННАЯ ПРЯМО В SCAFFOLD
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
@@ -163,7 +157,6 @@ class _HomeScreenState extends State<HomeScreen> {
           label: const Text('Поддержка', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
 
-        // 👇 ОСТАЛЬНОЕ ТЕЛО ЭКРАНА С ДВУМЯ КНОПКАМИ (ОСТАВИТЬ ЗАЯВКУ И ИСТОРИЯ)
         body: ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
@@ -245,4 +238,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
