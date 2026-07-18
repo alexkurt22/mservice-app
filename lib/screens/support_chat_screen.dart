@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import '../services/push_service.dart'; 
 
 class SupportChatScreen extends StatefulWidget {
   const SupportChatScreen({super.key});
@@ -46,8 +47,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         'created_at': FieldValue.serverTimestamp(),
         'last_message': 'Чат начат',
         'last_message_time': FieldValue.serverTimestamp(),
-        'unread_count': 0, // ❗ Инициализируем счетчик нулем
-        'last_sender': 'admin',
+        'unread_count': 0, 
+        'last_sender': phone, 
       });
       setState(() => _roomId = newRoomId);
     }
@@ -65,13 +66,21 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       'is_read': false,
     });
     
-    // ❗ ПРИБАВЛЯЕМ +1 К СЧЕТЧИКУ АДМИНА
     await FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).update({
       'last_message': text,
       'last_message_time': FieldValue.serverTimestamp(),
       'unread_count': FieldValue.increment(1), 
       'last_sender': _myPhone,
     });
+
+    try {
+      await PushService.sendPushToAdmins(
+        'Новое сообщение от клиента', 
+        text 
+      );
+    } catch (e) {
+      print('Push send failed: $e');
+    }
   }
 
   @override
@@ -110,7 +119,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         final Timestamp? ts = data['created_at'] as Timestamp?;
                         final DateTime dt = ts?.toDate() ?? DateTime.now();
                         
-                        // ❗ ПРОЧИТАЛИ СООБЩЕНИЕ АДМИНА -> СБРОС СЧЕТЧИКА В 0
                         if (!isMe && data['is_read'] == false) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             messages[i].reference.update({'is_read': true});
