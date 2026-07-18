@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_ringtone_player/flutter_ringtone_player.dart'; 
 
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
@@ -23,7 +22,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _phone;
   String? _clientName;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
-  StreamSubscription<QuerySnapshot>? _chatSubscription; 
 
   @override
   void initState() {
@@ -34,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _userSubscription?.cancel();
-    _chatSubscription?.cancel();
     super.dispose();
   }
 
@@ -48,26 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_phone != null) {
       _setupPushNotifications();
       _listenToBanHammer(); 
-      _listenToNewMessages(); 
     }
-  }
-
-  void _listenToNewMessages() {
-    _chatSubscription = FirebaseFirestore.instance.collection('chat_rooms')
-        .where('participants', arrayContains: _phone)
-        .snapshots().listen((snapshot) {
-      for (var change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.modified || change.type == DocumentChangeType.added) {
-          final data = change.doc.data() as Map<String, dynamic>;
-          // ❗ ТЕПЕРЬ СЛУШАЕМ СЧЕТЧИК unread_count
-          int unreadCount = data['unread_count'] as int? ?? 0;
-          if (unreadCount > 0 && data['last_sender'] != _phone) {
-            FlutterRingtonePlayer().playNotification(); 
-            HapticFeedback.heavyImpact(); 
-          }
-        }
-      }
-    });
   }
 
   void _listenToBanHammer() {
@@ -87,7 +65,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear(); 
     _userSubscription?.cancel(); 
-    _chatSubscription?.cancel();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -114,7 +91,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     _userSubscription?.cancel();
-    _chatSubscription?.cancel();
     if (!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
   }
@@ -177,12 +153,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         
+        // ❗ БЕЙДЖИКИ ОСТАЛИСЬ, ОНИ РАБОТАЮТ ИДЕАЛЬНО ❗
         floatingActionButton: StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('chat_rooms')
               .where('participants', arrayContains: _phone)
               .snapshots(),
           builder: (context, snapshot) {
-            int totalUnreadMessages = 0; // ❗ СЧИТАЕМ СООБЩЕНИЯ
+            int totalUnreadMessages = 0; 
             if (snapshot.hasData) {
               for (var doc in snapshot.data!.docs) {
                 final data = doc.data() as Map<String, dynamic>;
@@ -302,4 +279,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
