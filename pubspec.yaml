@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   intl: ^0.18.0  # Добавь эту строчку, если её нет
+  flutter_ringtone_player: ^3.3.0  # ❗ ДОБАВЬ ЭТУ СТРОКУ
   cupertino_icons: ^1.0.8
   firebase_core: ^3.1.0
   cloud_firestore: ^5.0.1
