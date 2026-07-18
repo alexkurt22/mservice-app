@@ -44,9 +44,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         'type': 'private',
         'participants': parts,
         'created_at': FieldValue.serverTimestamp(),
-        'last_message': 'Чат создан',
+        'last_message': 'Чат начат',
         'last_message_time': FieldValue.serverTimestamp(),
-        'has_unread': false,
+        'unread_count': 0, // ❗ Инициализируем счетчик нулем
         'last_sender': 'admin',
       });
       setState(() => _roomId = newRoomId);
@@ -65,11 +65,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       'is_read': false,
     });
     
-    // ❗ ОБНОВЛЯЕМ КОМНАТУ ДЛЯ БЕЙДЖИКОВ АДМИНА
+    // ❗ ПРИБАВЛЯЕМ +1 К СЧЕТЧИКУ АДМИНА
     await FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).update({
       'last_message': text,
       'last_message_time': FieldValue.serverTimestamp(),
-      'has_unread': true,
+      'unread_count': FieldValue.increment(1), 
       'last_sender': _myPhone,
     });
   }
@@ -110,12 +110,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         final Timestamp? ts = data['created_at'] as Timestamp?;
                         final DateTime dt = ts?.toDate() ?? DateTime.now();
                         
-                        // Если сообщение от админа и не прочитано -> читаем его
+                        // ❗ ПРОЧИТАЛИ СООБЩЕНИЕ АДМИНА -> СБРОС СЧЕТЧИКА В 0
                         if (!isMe && data['is_read'] == false) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             messages[i].reference.update({'is_read': true});
-                            // Сбрасываем бейджик на комнате
-                            FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).update({'has_unread': false});
+                            FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).update({'unread_count': 0});
                           });
                         }
                         
@@ -142,7 +141,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  // ❗ СВЕТЛЫЙ ФОН ДЛЯ КОНТРАСТНЫХ ГАЛОЧЕК
                                   color: isMe ? Colors.blue[50] : Colors.white,
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
@@ -158,7 +156,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                                         Text(DateFormat('HH:mm').format(dt), style: const TextStyle(fontSize: 11, color: Colors.grey)),
                                         if (isMe) ...[
                                           const SizedBox(width: 4),
-                                          // ❗ ЯВНЫЕ СИНИЕ И СЕРЫЕ ГАЛОЧКИ
                                           Icon(
                                             data['is_read'] == true ? Icons.done_all : Icons.check, 
                                             size: 14, 
@@ -211,3 +208,4 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     );
   }
 }
+
