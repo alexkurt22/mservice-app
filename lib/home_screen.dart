@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_ringtone_player/flutter_ringtone_player.dart'; // ❗ ИМПОРТ ЗВУКА
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart'; 
 
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _phone;
   String? _clientName;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
-  StreamSubscription<QuerySnapshot>? _chatSubscription; // ❗ Слушатель чатов
+  StreamSubscription<QuerySnapshot>? _chatSubscription; 
 
   @override
   void initState() {
@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_phone != null) {
       _setupPushNotifications();
       _listenToBanHammer(); 
-      _listenToNewMessages(); // ❗ Включаем радар новых сообщений
+      _listenToNewMessages(); 
     }
   }
 
@@ -60,10 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
       for (var change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.modified || change.type == DocumentChangeType.added) {
           final data = change.doc.data() as Map<String, dynamic>;
-          // Если пришло сообщение не от нас и оно не прочитано
+          
           if (data['has_unread'] == true && data['last_sender'] != _phone) {
-            FlutterRingtonePlayer.playNotification(); // Системный звук
-            HapticFeedback.heavyImpact(); // Сильная вибрация
+            // ❗ ИСПРАВЛЕНИЕ: Добавлены круглые скобки () для версии 4.0.0+
+            FlutterRingtonePlayer().playNotification(); 
+            HapticFeedback.heavyImpact(); 
           }
         }
       }
@@ -177,7 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         
-        // ❗ БЕЙДЖИК С НЕПРОЧИТАННЫМИ НА КНОПКЕ ЧАТА ❗
         floatingActionButton: StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('chat_rooms')
               .where('participants', arrayContains: _phone)
