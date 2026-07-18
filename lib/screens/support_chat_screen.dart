@@ -44,8 +44,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         'type': 'private',
         'participants': parts,
         'created_at': FieldValue.serverTimestamp(),
-        'last_message': 'Чат начат',
+        'last_message': 'Чат создан',
         'last_message_time': FieldValue.serverTimestamp(),
+        'has_unread': false,
+        'last_sender': 'admin',
       });
       setState(() => _roomId = newRoomId);
     }
@@ -63,9 +65,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       'is_read': false,
     });
     
+    // ❗ ОБНОВЛЯЕМ КОМНАТУ ДЛЯ БЕЙДЖИКОВ АДМИНА
     await FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).update({
       'last_message': text,
       'last_message_time': FieldValue.serverTimestamp(),
+      'has_unread': true,
+      'last_sender': _myPhone,
     });
   }
 
@@ -74,9 +79,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Чат с мастером'), // Более солидное название
-        backgroundColor: Colors.blueGrey[900], // Цвет как на главном экране
-        foregroundColor: Colors.white,
+        title: const Text('Чат с мастером'), 
+        backgroundColor: Colors.blueGrey[900], 
+        foregroundColor: Colors.white
       ),
       body: _roomId == null 
         ? const Center(child: CircularProgressIndicator())
@@ -105,9 +110,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         final Timestamp? ts = data['created_at'] as Timestamp?;
                         final DateTime dt = ts?.toDate() ?? DateTime.now();
                         
+                        // Если сообщение от админа и не прочитано -> читаем его
                         if (!isMe && data['is_read'] == false) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             messages[i].reference.update({'is_read': true});
+                            // Сбрасываем бейджик на комнате
+                            FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).update({'has_unread': false});
                           });
                         }
                         
@@ -134,7 +142,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  // ❗ СВЕТЛО-ГОЛУБОЙ ДЛЯ СВОИХ, БЕЛЫЙ ДЛЯ ЧУЖИХ
+                                  // ❗ СВЕТЛЫЙ ФОН ДЛЯ КОНТРАСТНЫХ ГАЛОЧЕК
                                   color: isMe ? Colors.blue[50] : Colors.white,
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
@@ -142,7 +150,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                                 child: Column(
                                   crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                                   children: [
-                                    // ❗ ТЕКСТ ВСЕГДА ТЕМНЫЙ ДЛЯ ЧИТАЕМОСТИ
                                     Text(data['text'], style: const TextStyle(fontSize: 16, color: Colors.black87)),
                                     const SizedBox(height: 4),
                                     Row(
@@ -151,7 +158,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                                         Text(DateFormat('HH:mm').format(dt), style: const TextStyle(fontSize: 11, color: Colors.grey)),
                                         if (isMe) ...[
                                           const SizedBox(width: 4),
-                                          // ❗ ИДЕАЛЬНЫЕ ГАЛОЧКИ КАК В ТЕЛЕГРАМ
+                                          // ❗ ЯВНЫЕ СИНИЕ И СЕРЫЕ ГАЛОЧКИ
                                           Icon(
                                             data['is_read'] == true ? Icons.done_all : Icons.check, 
                                             size: 14, 
@@ -192,7 +199,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                       const SizedBox(width: 8),
                       CircleAvatar(
                         radius: 24,
-                        backgroundColor: Colors.blueGrey[900], // Кнопка отправки тоже строгая
+                        backgroundColor: Colors.blueGrey[900], 
                         child: IconButton(icon: const Icon(Icons.send, color: Colors.white), onPressed: _sendMessage),
                       ),
                     ],
