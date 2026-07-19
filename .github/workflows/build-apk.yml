@@ -44,26 +44,29 @@ jobs:
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
 
-                        # ❗ БЕЗОПАСНОЕ ВНЕДРЕНИЕ КЛЮЧЕЙ ЧЕРЕЗ DART (ИСПРАВЛЕНО) ❗
+      # Безопасное внедрение ключа пушей из сейфа прямо перед сборкой
       - name: Inject Secret Keys
         env:
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           mkdir -p assets
-          cat << 'EOF' > write_key.dart
-          import 'dart:io';
-          void main() {
-            File('assets/firebase_credentials.json').writeAsStringSync(Platform.environment['FIREBASE_SECRET'] ?? '');
-          }
-          EOF
-          dart write_key.dart
+          printf "%s" "$FIREBASE_SECRET" > assets/firebase_credentials.json
 
-          
       - name: Build APK
         run: flutter build apk --release
+
+      # Генерация уникального имени файла с датой и временем
+      - name: Rename APK with Date and Time
+        run: |
+          export TZ="Asia/Ashgabat"
+          BUILD_TIME=$(date +'%d-%m-%Y_%H-%M')
+          NEW_NAME="MService_App_${BUILD_TIME}.apk"
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/$NEW_NAME
+          echo "FINAL_APK_NAME=$NEW_NAME" >> $GITHUB_ENV
+          echo "FINAL_ZIP_NAME=MService_App_${BUILD_TIME}" >> $GITHUB_ENV
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: ${{ env.FINAL_ZIP_NAME }}
+          path: build/app/outputs/flutter-apk/${{ env.FINAL_APK_NAME }}
