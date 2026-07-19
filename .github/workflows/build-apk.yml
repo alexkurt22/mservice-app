@@ -44,18 +44,25 @@ jobs:
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
 
-      # Безопасное внедрение ключа пушей из сейфа прямо перед сборкой
+      # ❗ БРОНЕБОЙНОЕ ВНЕДРЕНИЕ КЛЮЧА В DART-КОД ❗
       - name: Inject Secret Keys
         env:
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           mkdir -p assets
-          printf "%s" "$FIREBASE_SECRET" > assets/firebase_credentials.json
+          echo "{}" > assets/firebase_credentials.json
+          mkdir -p lib/secret
+          cat << 'EOF' > lib/secret/firebase_secret.dart
+          const String firebaseSecret = r'''
+          EOF
+          printf "%s" "$FIREBASE_SECRET" >> lib/secret/firebase_secret.dart
+          cat << 'EOF' >> lib/secret/firebase_secret.dart
+          ''';
+          EOF
 
       - name: Build APK
         run: flutter build apk --release
 
-      # Генерация уникального имени файла с датой и временем
       - name: Rename APK with Date and Time
         run: |
           export TZ="Asia/Ashgabat"
