@@ -7,11 +7,31 @@ class PushService {
   static Future<String> sendPushToAdmins(String title, String body) async {
     try {
       final jsonString = await rootBundle.loadString('assets/firebase_credentials.json');
-      final accountCredentials = ServiceAccountCredentials.fromJson(jsonString);
+      final map = jsonDecode(jsonString);
+
+      String pk = map['private_key'] as String;
+      pk = pk.replaceAll(r'\n', '\n'); 
+      pk = pk.replaceAll('-----BEGIN PRIVATE KEY-----', '');
+      pk = pk.replaceAll('-----END PRIVATE KEY-----', '');
+      pk = pk.replaceAll(RegExp(r'\s+'), ''); 
+
+      String chunkedPk = '';
+      for (int i = 0; i < pk.length; i += 64) {
+        chunkedPk += pk.substring(i, i + 64 > pk.length ? pk.length : i + 64) + '\n';
+      }
+      final cleanKey = '-----BEGIN PRIVATE KEY-----\n$chunkedPk-----END PRIVATE KEY-----\n';
+
+      final credentials = ServiceAccountCredentials.fromJson({
+        "client_email": map['client_email'],
+        "client_id": map['client_id'],
+        "private_key": cleanKey,
+        "type": "service_account",
+        "project_id": map['project_id']
+      });
 
       final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
-      final client = await clientViaServiceAccount(accountCredentials, scopes);
-      final projectId = jsonDecode(jsonString)['project_id'];
+      final client = await clientViaServiceAccount(credentials, scopes);
+      final projectId = map['project_id'];
 
       final url = 'https://fcm.googleapis.com/v1/projects/$projectId/messages:send';
       final payload = {
