@@ -44,13 +44,19 @@ jobs:
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
 
-                  # ❗ БЕЗОПАСНОЕ ВНЕДРЕНИЕ КЛЮЧЕЙ ЧЕРЕЗ DART (БЕЗ ПОЛОМКИ СИМВОЛОВ) ❗
+                        # ❗ БЕЗОПАСНОЕ ВНЕДРЕНИЕ КЛЮЧЕЙ ЧЕРЕЗ DART (ИСПРАВЛЕНО) ❗
       - name: Inject Secret Keys
         env:
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           mkdir -p assets
-          dart -e "import 'dart:io'; void main() { File('assets/firebase_credentials.json').writeAsStringSync(Platform.environment['FIREBASE_SECRET'] ?? ''); }"
+          cat << 'EOF' > write_key.dart
+          import 'dart:io';
+          void main() {
+            File('assets/firebase_credentials.json').writeAsStringSync(Platform.environment['FIREBASE_SECRET'] ?? '');
+          }
+          EOF
+          dart write_key.dart
 
           
       - name: Build APK
