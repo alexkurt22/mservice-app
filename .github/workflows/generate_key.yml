@@ -1,0 +1,20 @@
+name: Generate Permanent Keystore
+on: workflow_dispatch
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Key and Convert to Text
+        run: |
+          # Создаем ключ 1 раз
+          keytool -genkey -v -keystore my-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -dname "CN=MService, OU=App, O=MService, L=Ashgabat, ST=Ashgabat, C=TM" -storepass "mservice123" -keypass "mservice123"
+          # Превращаем его в текст
+          base64 my-key.jks > keystore_base64.txt
+          
+      - name: Upload Text File
+        uses: actions/upload-artifact@v4
+        with:
+          name: keystore-text
+          path: keystore_base64.txt
+
