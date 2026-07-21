@@ -11,6 +11,10 @@ import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
 
+// === ТЕКУЩАЯ ВЕРСИЯ ПРИЛОЖЕНИЯ ===
+// Когда будешь делать обновления, меняй эту цифру здесь и компилируй новый APK.
+const String CURRENT_APP_VERSION = "1.0.0"; 
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
@@ -19,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0; // Для переключения вкладок
+  int _currentIndex = 0; 
   String? _phone;
   String? _clientName;
   bool _isLoading = true;
@@ -29,12 +33,77 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadUserData();
+    _checkForUpdates(); // Проверяем обновления при старте!
   }
 
   @override
   void dispose() {
     _userSubscription?.cancel();
     super.dispose();
+  }
+
+  // --- СИСТЕМА АВТООБНОВЛЕНИЯ (OTA) ---
+  Future<void> _checkForUpdates() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('settings').doc('app_info').get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        final latestVersion = data['latest_version'] as String?;
+        final downloadUrl = data['download_url'] as String?;
+        final forceUpdate = data['force_update'] as bool? ?? false;
+
+        // Если версия в базе отличается от версии в коде - предлагаем обновить
+        if (latestVersion != null && latestVersion != CURRENT_APP_VERSION && downloadUrl != null && downloadUrl.isNotEmpty) {
+          _showUpdateDialog(downloadUrl, forceUpdate);
+        }
+      }
+    } catch (e) {
+      debugPrint('Ошибка проверки обновлений: $e');
+    }
+  }
+
+  void _showUpdateDialog(String downloadUrl, bool forceUpdate) {
+    showDialog(
+      context: context,
+      barrierDismissible: !forceUpdate, // Если forceUpdate = true, нельзя закрыть окно мимо кнопки
+      builder: (context) {
+        return PopScope(
+          canPop: !forceUpdate, // Блокируем кнопку "Назад" на телефоне для обязательных обновлений
+          child: AlertDialog(
+            title: Row(
+              children: const [
+                Icon(Icons.system_update, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('Обновление', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Text(
+              forceUpdate 
+                ? 'Вышла важная новая версия приложения! Для продолжения работы необходимо обновиться.'
+                : 'Доступна новая версия приложения с новыми функциями. Рекомендуем обновить.'
+            ),
+            actions: [
+              if (!forceUpdate)
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Позже', style: TextStyle(color: Colors.grey)),
+                ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600]),
+                onPressed: () async {
+                  final uri = Uri.parse(downloadUrl);
+                  if (await canLaunchUrl(uri)) {
+                    // LaunchMode.externalApplication заставит Android открыть браузер (Chrome) и скачать APK
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: const Text('Скачать обновление', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      }
+    );
   }
 
   Future<void> _loadUserData() async {
@@ -130,7 +199,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- МЕНЮ ЦЕНТРАЛЬНОЙ КНОПКИ "+" ---
   void _showCreateActionSheet() {
     showModalBottomSheet(
       context: context,
@@ -204,84 +272,129 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- ВКЛАДКА 1: ГЛАВНАЯ (ЛЕНТА + ТРЕКЕР ЗАКАЗА) ---
+  // --- ВКЛАДКА 1: ГЛАВНАЯ (ИСПРАВЛЕННАЯ С ЧАТОМ) ---
   Widget _buildHomeTab() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
       children: [
-        if (_phone != null)
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('orders')
-                .where('phone', isEqualTo: _phone)
-                .where('status', whereIn: ['new', 'awaiting_approval', 'in_progress'])
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const SizedBox.shrink(); 
-              }
-              
-              final doc = snapshot.data!.docs.first;
-              final data = doc.data() as Map<String, dynamic>;
-              final statusInfo = _getStatusInfo(data['status'] ?? 'new');
-              
-              return GestureDetector(
-                onTap: () {
-                   Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
-                },
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [(statusInfo['color'] as Color).withOpacity(0.8), statusInfo['color']],
-                      begin: Alignment.topLeft, end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: (statusInfo['color'] as Color).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
-                        child: Icon(statusInfo['icon'], color: Colors.white, size: 28),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 4),
-                            Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
-                          ],
+        // Основной контент
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_phone != null)
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('orders')
+                    .where('phone', isEqualTo: _phone)
+                    .where('status', whereIn: ['new', 'awaiting_approval', 'in_progress'])
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const SizedBox.shrink(); 
+                  }
+                  
+                  final doc = snapshot.data!.docs.first;
+                  final data = doc.data() as Map<String, dynamic>;
+                  final statusInfo = _getStatusInfo(data['status'] ?? 'new');
+                  
+                  return GestureDetector(
+                    onTap: () {
+                       Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [(statusInfo['color'] as Color).withOpacity(0.8), statusInfo['color']],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [BoxShadow(color: (statusInfo['color'] as Color).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
                       ),
-                      const Icon(Icons.chevron_right, color: Colors.white),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                            child: Icon(statusInfo['icon'], color: Colors.white, size: 28),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                const SizedBox(height: 4),
+                                Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, color: Colors.white),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.video_library, size: 64, color: Colors.grey[300]),
+                      const SizedBox(height: 16),
+                      Text('Скоро здесь появятся\nлайфхаки и новости', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
                     ],
                   ),
                 ),
-              );
-            },
-          ),
-          
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.video_library, size: 64, color: Colors.grey[300]),
-                  const SizedBox(height: 16),
-                  Text('Скоро здесь появятся\nлайфхаки и новости', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
-                ],
               ),
+          ],
+        ),
+
+        // --- КНОПКА ЧАТА (ТЕПЕРЬ ПЛАВАЕТ ПРАВИЛЬНО, НЕ МЕШАЯ ПЛЮСИКУ) ---
+        if (_phone != null)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('chat_rooms')
+                  .where('participants', arrayContains: _phone)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                int totalUnreadMessages = 0; 
+                if (snapshot.hasData) {
+                  for (var doc in snapshot.data!.docs) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    int count = data['unread_count'] as int? ?? 0;
+                    if (count > 0 && data['last_sender'] != _phone) {
+                      totalUnreadMessages += count;
+                    }
+                  }
+                }
+
+                return Badge(
+                  isLabelVisible: totalUnreadMessages > 0,
+                  label: Text(totalUnreadMessages.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  backgroundColor: Colors.red,
+                  offset: const Offset(-4, -4),
+                  child: FloatingActionButton(
+                    heroTag: 'chat_btn', // ВАЖНО: чтобы не конфликтовало с плюсиком
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
+                    },
+                    backgroundColor: Colors.blueGrey[900],
+                    elevation: 4,
+                    child: const Icon(Icons.chat, color: Colors.white),
+                  ),
+                );
+              },
             ),
           ),
       ],
     );
   }
 
-  // --- ВКЛАДКА 2: ПРОФИЛЬ (БАЗОВАЯ ИНФОРМАЦИЯ И ЗАКАЗЫ) ---
+  // --- ВКЛАДКА 2: ПРОФИЛЬ ---
   Widget _buildProfileTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -397,50 +510,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           centerTitle: false,
           actions: [
-            if (_currentIndex == 1) // Показываем кнопку выхода только в Профиле
+            if (_currentIndex == 1) 
               IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: _logout, tooltip: 'Выйти'),
           ],
         ),
         
-        // --- ЧАТ ОСТАЕТСЯ (БЕЙДЖИКИ РАБОТАЮТ) ---
-        floatingActionButton: _currentIndex == 0 // Чат показываем только на Главной
-        ? StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('chat_rooms')
-                .where('participants', arrayContains: _phone)
-                .snapshots(),
-            builder: (context, snapshot) {
-              int totalUnreadMessages = 0; 
-              if (snapshot.hasData) {
-                for (var doc in snapshot.data!.docs) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  int count = data['unread_count'] as int? ?? 0;
-                  if (count > 0 && data['last_sender'] != _phone) {
-                    totalUnreadMessages += count;
-                  }
-                }
-              }
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 24.0, right: 8.0), // Отступ, чтобы не перекрывать нижнюю панель
-                child: Badge(
-                  isLabelVisible: totalUnreadMessages > 0,
-                  label: Text(totalUnreadMessages.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  backgroundColor: Colors.red,
-                  offset: const Offset(-4, -4),
-                  child: FloatingActionButton(
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
-                    },
-                    backgroundColor: Colors.blueGrey[900],
-                    elevation: 4,
-                    child: const Icon(Icons.chat, color: Colors.white),
-                  ),
-                ),
-              );
-            },
-          )
-        : null,
-
         body: IndexedStack(
           index: _currentIndex,
           children: [
@@ -449,7 +523,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
 
-        // --- НОВАЯ НИЖНЯЯ ПАНЕЛЬ С ЦЕНТРАЛЬНОЙ КНОПКОЙ ---
+        // --- ВОЗВРАЩЕННАЯ КНОПКА "+" ПО ЦЕНТРУ ---
+        floatingActionButton: FloatingActionButton(
+          heroTag: 'create_btn',
+          backgroundColor: Colors.blueGrey[900],
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          onPressed: _showCreateActionSheet,
+          child: const Icon(Icons.add, color: Colors.white, size: 32),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+
+        // НИЖНЯЯ ПАНЕЛЬ С ВЫРЕЗОМ
         bottomNavigationBar: BottomAppBar(
           shape: const CircularNotchedRectangle(),
           notchMargin: 8.0,
@@ -472,7 +557,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 
-                const SizedBox(width: 48), // Место под кнопку "+"
+                const SizedBox(width: 48), 
                 
                 MaterialButton(
                   minWidth: 60,
@@ -489,12 +574,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        
-        // САМА КНОПКА "+" ПО ЦЕНТРУ
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        // Оборачиваем центральную кнопку в Builder для правильного контекста
-        // Иначе она может перекрываться другими FAB
-        floatingActionButtonAnimator: FloatingActionButtonAnimator.scaling,
       ),
     );
   }
