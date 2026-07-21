@@ -15,6 +15,16 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
   int? _selectedOption;
   bool _isLoading = false;
 
+  // Функция для красивого форматирования даты и времени
+  String _formatDate(DateTime date) {
+    final d = date.day.toString().padLeft(2, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final y = date.year.toString();
+    final h = date.hour.toString().padLeft(2, '0');
+    final min = date.minute.toString().padLeft(2, '0');
+    return '$d.$m.$y в $h:$min';
+  }
+
   Widget _buildHistoryBlock(Map<String, dynamic> data) {
     final history = data['history'] as List<dynamic>?;
     if (history == null || history.isEmpty) return const SizedBox.shrink();
@@ -49,8 +59,38 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     );
   }
 
-  // --- ЭЛЕКТРОННЫЙ ЧЕК И ГАРАНТИЯ ---
+  // --- УМНЫЙ ЭЛЕКТРОННЫЙ ЧЕК И ГАРАНТИЯ ---
   Widget _buildReceiptCard() {
+    Timestamp? completedAtTs = widget.data['completed_at'] as Timestamp?;
+    
+    String dateStr = 'Дата не указана';
+    String warrantyText = 'Ожидание выдачи...';
+    Color warrantyColor = Colors.orange;
+    IconData warrantyIcon = Icons.hourglass_bottom;
+
+    // Логика расчета гарантии
+    if (completedAtTs != null) {
+      DateTime completedDate = completedAtTs.toDate();
+      dateStr = _formatDate(completedDate);
+      
+      DateTime expiryDate = completedDate.add(const Duration(days: 30)); // 30 дней базовой гарантии
+      DateTime now = DateTime.now();
+      
+      if (now.isAfter(expiryDate)) {
+        // Гарантия истекла
+        warrantyText = 'Гарантийный период завершён';
+        warrantyColor = Colors.grey;
+        warrantyIcon = Icons.gpp_bad;
+      } else {
+        // Гарантия еще действует
+        int daysLeft = expiryDate.difference(now).inDays;
+        String daysStr = daysLeft > 0 ? 'Осталось дней: $daysLeft' : 'Истекает сегодня!';
+        warrantyText = 'Гарантия активна\n$daysStr';
+        warrantyColor = Colors.green;
+        warrantyIcon = Icons.verified_user;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -68,7 +108,15 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
               Icon(Icons.receipt_long, color: Colors.blueGrey[300]),
             ],
           ),
-          const Divider(height: 32, thickness: 1),
+          const Divider(height: 24, thickness: 1),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Дата выдачи:', style: TextStyle(color: Colors.grey)),
+              Text(dateStr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -92,7 +140,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
               ),
             ],
           ),
-          const Divider(height: 32, thickness: 1),
+          const Divider(height: 24, thickness: 1),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -101,15 +149,25 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          // ГАРАНТИЙНЫЙ ТАЛОН (Заглушка для будущего расширения)
+          
+          // ДИНАМИЧЕСКИЙ ГАРАНТИЙНЫЙ ТАЛОН
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green[200]!)),
-            child: const Row(
+            decoration: BoxDecoration(
+              color: warrantyColor.withOpacity(0.1), 
+              borderRadius: BorderRadius.circular(8), 
+              border: Border.all(color: warrantyColor.withOpacity(0.5))
+            ),
+            child: Row(
               children: [
-                Icon(Icons.verified_user, color: Colors.green),
-                SizedBox(width: 8),
-                Expanded(child: Text('Базовая гарантия: 30 дней\nАктивна с момента выдачи', style: TextStyle(color: Colors.green, fontSize: 13, fontWeight: FontWeight.bold))),
+                Icon(warrantyIcon, color: warrantyColor, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    warrantyText, 
+                    style: TextStyle(color: warrantyColor, fontSize: 14, fontWeight: FontWeight.bold)
+                  )
+                ),
               ],
             ),
           )
@@ -255,7 +313,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                   ),
 
                 if (status == 'completed') 
-                  _buildReceiptCard(), // ВЫВОДИМ КРАСИВЫЙ ЧЕК С ГАРАНТИЕЙ
+                  _buildReceiptCard(), 
               ],
 
               // 5. БЛОК ОТМЕНЕНО
@@ -277,4 +335,3 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     );
   }
 }
-
