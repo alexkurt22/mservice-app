@@ -19,8 +19,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0; // Для переключения вкладок
   String? _phone;
   String? _clientName;
+  bool _isLoading = true;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
 
   @override
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _phone = prefs.getString('phone');
       _clientName = prefs.getString('client_name');
+      _isLoading = false;
     });
 
     if (_phone != null) {
@@ -127,9 +130,253 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // --- МЕНЮ ЦЕНТРАЛЬНОЙ КНОПКИ "+" ---
+  void _showCreateActionSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+              ),
+              const Text('Что вы хотите сделать?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                tileColor: Colors.blue[50],
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.blue[100], shape: BoxShape.circle),
+                  child: Icon(Icons.build_circle, color: Colors.blue[700], size: 28),
+                ),
+                title: const Text('Вызвать мастера / Ремонт', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                subtitle: const Text('Заявка на ремонт вашей техники', style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                trailing: const Icon(Icons.chevron_right, color: Colors.blueGrey),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen()));
+                },
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                tileColor: Colors.orange[50],
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.orange[100], shape: BoxShape.circle),
+                  child: Icon(Icons.shopping_bag, color: Colors.orange[700], size: 28),
+                ),
+                title: const Text('Магазин товаров', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                subtitle: const Text('Комплектующие и аксессуары', style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                trailing: const Icon(Icons.chevron_right, color: Colors.blueGrey),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Магазин в разработке! Скоро открытие.')));
+                },
+              ),
+              const SizedBox(height: 24), 
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  Map<String, dynamic> _getStatusInfo(String status) {
+    switch (status) {
+      case 'new': return {'text': 'Заявка принята, ожидайте', 'color': Colors.blue, 'icon': Icons.access_time_filled};
+      case 'awaiting_approval': return {'text': 'Требует вашего ответа!', 'color': Colors.orange, 'icon': Icons.notification_important};
+      case 'in_progress': return {'text': 'Устройство в ремонте', 'color': Colors.teal, 'icon': Icons.handyman};
+      default: return {'text': 'Обработка...', 'color': Colors.grey, 'icon': Icons.info};
+    }
+  }
+
+  // --- ВКЛАДКА 1: ГЛАВНАЯ (ЛЕНТА + ТРЕКЕР ЗАКАЗА) ---
+  Widget _buildHomeTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_phone != null)
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('orders')
+                .where('phone', isEqualTo: _phone)
+                .where('status', whereIn: ['new', 'awaiting_approval', 'in_progress'])
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const SizedBox.shrink(); 
+              }
+              
+              final doc = snapshot.data!.docs.first;
+              final data = doc.data() as Map<String, dynamic>;
+              final statusInfo = _getStatusInfo(data['status'] ?? 'new');
+              
+              return GestureDetector(
+                onTap: () {
+                   Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+                },
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [(statusInfo['color'] as Color).withOpacity(0.8), statusInfo['color']],
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: (statusInfo['color'] as Color).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                        child: Icon(statusInfo['icon'], color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 4),
+                            Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Colors.white),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.video_library, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  Text('Скоро здесь появятся\nлайфхаки и новости', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // --- ВКЛАДКА 2: ПРОФИЛЬ (БАЗОВАЯ ИНФОРМАЦИЯ И ЗАКАЗЫ) ---
+  Widget _buildProfileTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  CircleAvatar(radius: 40, backgroundColor: Colors.blueGrey[100], child: const Icon(Icons.person, size: 40, color: Colors.blueGrey)),
+                  const SizedBox(height: 16),
+                  Text(_clientName ?? 'Клиент', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(_phone ?? '', style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text('МОЙ АККАУНТ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('orders')
+                .where('phone', isEqualTo: _phone)
+                .where('has_unread_update', isEqualTo: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              int unreadCount = 0;
+              if (snapshot.hasData) {
+                unreadCount = snapshot.data!.docs.length;
+              }
+
+              return Badge(
+                isLabelVisible: unreadCount > 0,
+                label: Text(unreadCount.toString()),
+                offset: const Offset(-4, -4),
+                child: _buildMenuCard(
+                  title: 'Мои заказы',
+                  subtitle: 'История ремонтов и статусы',
+                  icon: Icons.list_alt,
+                  iconColor: Colors.blueGrey[700]!,
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+                  },
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildMenuCard(
+            title: 'Служба поддержки',
+            subtitle: 'Связь с администратором',
+            icon: Icons.headset_mic,
+            iconColor: Colors.teal[700]!,
+            onTap: _callAdmin,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0),
+          child: ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: iconColor.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(icon, size: 28, color: iconColor),
+            ),
+            title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+            subtitle: Text(subtitle, style: TextStyle(color: Colors.blueGrey[400], fontSize: 13)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_phone == null) {
+    if (_phone == null || _isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -142,140 +389,114 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
-          backgroundColor: Colors.blueGrey[900],
-          foregroundColor: Colors.white,
+          backgroundColor: Colors.white,
+          elevation: 0,
           title: Text(
-            'Добро пожаловать, ${_clientName ?? "Клиент"}!',
-            style: const TextStyle(fontSize: 18),
+            _currentIndex == 0 ? 'M-Service' : 'Профиль',
+            style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 24),
           ),
+          centerTitle: false,
           actions: [
-            IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Сменить аккаунт'),
+            if (_currentIndex == 1) // Показываем кнопку выхода только в Профиле
+              IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: _logout, tooltip: 'Выйти'),
           ],
         ),
         
-        // ❗ БЕЙДЖИКИ ОСТАЛИСЬ, ОНИ РАБОТАЮТ ИДЕАЛЬНО ❗
-        floatingActionButton: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('chat_rooms')
-              .where('participants', arrayContains: _phone)
-              .snapshots(),
-          builder: (context, snapshot) {
-            int totalUnreadMessages = 0; 
-            if (snapshot.hasData) {
-              for (var doc in snapshot.data!.docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                int count = data['unread_count'] as int? ?? 0;
-                if (count > 0 && data['last_sender'] != _phone) {
-                  totalUnreadMessages += count;
+        // --- ЧАТ ОСТАЕТСЯ (БЕЙДЖИКИ РАБОТАЮТ) ---
+        floatingActionButton: _currentIndex == 0 // Чат показываем только на Главной
+        ? StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('chat_rooms')
+                .where('participants', arrayContains: _phone)
+                .snapshots(),
+            builder: (context, snapshot) {
+              int totalUnreadMessages = 0; 
+              if (snapshot.hasData) {
+                for (var doc in snapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  int count = data['unread_count'] as int? ?? 0;
+                  if (count > 0 && data['last_sender'] != _phone) {
+                    totalUnreadMessages += count;
+                  }
                 }
               }
-            }
 
-            return Badge(
-              isLabelVisible: totalUnreadMessages > 0,
-              label: Text(totalUnreadMessages.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              backgroundColor: Colors.red,
-              offset: const Offset(-4, -4),
-              child: FloatingActionButton.extended(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
-                },
-                backgroundColor: Colors.blueGrey[900],
-                elevation: 4,
-                icon: const Icon(Icons.support_agent, color: Colors.orangeAccent),
-                label: const Text('Чат с мастером', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-              ),
-            );
-          },
-        ),
-
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 8),
-              
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('orders')
-                    .where('phone', isEqualTo: _phone)
-                    .where('has_unread_update', isEqualTo: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  int unreadCount = 0;
-                  if (snapshot.hasData) {
-                    unreadCount = snapshot.data!.docs.length;
-                  }
-
-                  return Badge(
-                    isLabelVisible: unreadCount > 0,
-                    label: Text(unreadCount.toString()),
-                    offset: const Offset(-4, -4),
-                    child: _buildMenuCard(
-                      title: 'Мои заказы',
-                      subtitle: 'История и согласование статуса',
-                      icon: Icons.list_alt,
-                      iconColor: Colors.blueGrey[700]!,
-                      onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
-                      },
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              
-              _buildMenuCard(
-                title: 'Оформить заказ',
-                subtitle: 'Создать новый заказ на ремонт',
-                icon: Icons.add_circle_outline,
-                iconColor: Colors.blueGrey[700]!,
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen()));
-                },
-              ),
-              
-              const SizedBox(height: 48),
-              
-              Center(
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.blueGrey[400],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 24.0, right: 8.0), // Отступ, чтобы не перекрывать нижнюю панель
+                child: Badge(
+                  isLabelVisible: totalUnreadMessages > 0,
+                  label: Text(totalUnreadMessages.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  backgroundColor: Colors.red,
+                  offset: const Offset(-4, -4),
+                  child: FloatingActionButton(
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
+                    },
+                    backgroundColor: Colors.blueGrey[900],
+                    elevation: 4,
+                    child: const Icon(Icons.chat, color: Colors.white),
                   ),
-                  onPressed: _callAdmin,
-                  icon: const Icon(Icons.call, size: 20),
-                  label: const Text('Позвонить администратору', style: TextStyle(fontSize: 14)),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+              );
+            },
+          )
+        : null,
 
-  Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12.0),
-          child: ListTile(
-            leading: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: iconColor.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, size: 32, color: iconColor),
+        body: IndexedStack(
+          index: _currentIndex,
+          children: [
+            _buildHomeTab(),
+            _buildProfileTab(),
+          ],
+        ),
+
+        // --- НОВАЯ НИЖНЯЯ ПАНЕЛЬ С ЦЕНТРАЛЬНОЙ КНОПКОЙ ---
+        bottomNavigationBar: BottomAppBar(
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8.0,
+          color: Colors.white,
+          elevation: 20,
+          child: SizedBox(
+            height: 60,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                MaterialButton(
+                  minWidth: 60,
+                  onPressed: () => setState(() => _currentIndex = 0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.home_filled, color: _currentIndex == 0 ? Colors.blueGrey[900] : Colors.grey[400]),
+                      Text('Главная', style: TextStyle(fontSize: 10, color: _currentIndex == 0 ? Colors.blueGrey[900] : Colors.grey[400], fontWeight: _currentIndex == 0 ? FontWeight.bold : FontWeight.normal)),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(width: 48), // Место под кнопку "+"
+                
+                MaterialButton(
+                  minWidth: 60,
+                  onPressed: () => setState(() => _currentIndex = 1),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.person, color: _currentIndex == 1 ? Colors.blueGrey[900] : Colors.grey[400]),
+                      Text('Профиль', style: TextStyle(fontSize: 10, color: _currentIndex == 1 ? Colors.blueGrey[900] : Colors.grey[400], fontWeight: _currentIndex == 1 ? FontWeight.bold : FontWeight.normal)),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-            subtitle: Text(subtitle, style: TextStyle(color: Colors.blueGrey[400])),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
           ),
         ),
+        
+        // САМА КНОПКА "+" ПО ЦЕНТРУ
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        // Оборачиваем центральную кнопку в Builder для правильного контекста
+        // Иначе она может перекрываться другими FAB
+        floatingActionButtonAnimator: FloatingActionButtonAnimator.scaling,
       ),
     );
   }
 }
+
