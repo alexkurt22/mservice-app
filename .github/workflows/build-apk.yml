@@ -1,4 +1,4 @@
-name: Build APK
+Name: Build APK
 
 on:
   push:
@@ -44,25 +44,39 @@ jobs:
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
 
-            # Бронебойная распаковка ключа из Base64
-      - name: Inject Secret Keys
+      # --- ЧИТАЕМ СЕКРЕТЫ ИЗ СЕЙФА GITHUB ---
+      - name: Inject Secret Keys and Permanent Keystore
         env:
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          KEYSTORE_SECRET: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           mkdir -p assets
           echo "$FIREBASE_SECRET" | base64 -d > assets/firebase_credentials.json
+          
+          # Расшифровываем наш постоянный ключ!
+          echo "$KEYSTORE_SECRET" | base64 -d > android/app/upload-keystore.jks
+          
+          # Настраиваем Gradle на использование этого ключа
+          echo "storePassword=mservice123" > android/key.properties
+          echo "keyPassword=mservice123" >> android/key.properties
+          echo "keyAlias=upload" >> android/key.properties
+          echo "storeFile=upload-keystore.jks" >> android/key.properties
+          
+          sed -i '/android {/a \    signingConfigs {\n        release {\n            storeFile file("upload-keystore.jks")\n            storePassword "mservice123"\n            keyAlias "upload"\n            keyPassword "mservice123"\n        }\n    }' android/app/build.gradle
+          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/g' android/app/build.gradle
 
+      # --- СБОРКА С АВТО-ПОВЫШЕНИЕМ ВЕРСИИ ---
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
 
       - name: Rename APK with Date and Time
         run: |
           export TZ="Asia/Ashgabat"
           BUILD_TIME=$(date +'%d-%m-%Y_%H-%M')
-          NEW_NAME="MService_App_${BUILD_TIME}.apk"
+          NEW_NAME="MService_App_v1.0.${{ github.run_number }}_${BUILD_TIME}.apk"
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/$NEW_NAME
           echo "FINAL_APK_NAME=$NEW_NAME" >> $GITHUB_ENV
-          echo "FINAL_ZIP_NAME=MService_App_${BUILD_TIME}" >> $GITHUB_ENV
+          echo "FINAL_ZIP_NAME=MService_App_v1.0.${{ github.run_number }}_${BUILD_TIME}" >> $GITHUB_ENV
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
