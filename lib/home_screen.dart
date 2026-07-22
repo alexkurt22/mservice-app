@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
@@ -143,7 +142,6 @@ class _HomeScreenState extends State<HomeScreen> {
         'phone': _phone,
         'name': _clientName ?? 'Клиент',
         'bonus_points': welcomePoints,
-        'referral_code': 'MSRV-${_phone!.substring(_phone!.length > 4 ? _phone!.length - 4 : 0)}',
         'created_at': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -248,7 +246,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ЛОГИКА ДИАЛОГА ДЛЯ ОТЗЫВА (С МОДЕРАЦИЕЙ) ---
   void _showReviewDialog(QueryDocumentSnapshot order, Map<String, dynamic> data) {
     int rating = 5;
     bool isAnonymous = false;
@@ -312,14 +309,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       }
 
                       try {
-                        // Сохраняем в коллекцию отзывов со статусом is_approved: false (отправляем на модерацию)
                         await FirebaseFirestore.instance.collection('reviews').add({
                           'rating': rating,
                           'text': commentController.text.trim(),
                           'author_name': clientName,
                           'device_type': data['device_type'] ?? 'Устройство',
                           'created_at': FieldValue.serverTimestamp(),
-                          'is_approved': false, // <--- ФЛАГ МОДЕРАЦИИ
+                          'is_approved': false, 
                         });
 
                         await order.reference.update({
@@ -358,14 +354,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- ВИДЖЕТ: КАРУСЕЛЬ ОТЗЫВОВ ---
   Widget _buildReviewsCarousel() {
     return StreamBuilder<QuerySnapshot>(
-      // Берем ТОЛЬКО одобренные админом отзывы
       stream: FirebaseFirestore.instance.collection('reviews').where('is_approved', isEqualTo: true).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          // Если отзывов пока нет, показываем красивую заглушку
           return Column(
             children: [
               Icon(Icons.forum, size: 64, color: Colors.grey[300]),
@@ -376,7 +369,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         var docs = snapshot.data!.docs;
-        // Сортируем локально по дате (самые новые слева), чтобы избежать ошибок с индексами Firebase
         docs.sort((a, b) {
           final aData = a.data() as Map<String, dynamic>;
           final bData = b.data() as Map<String, dynamic>;
@@ -399,7 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: docs.length > 10 ? 10 : docs.length, // Показываем максимум 10 последних
+                itemCount: docs.length > 10 ? 10 : docs.length,
                 itemBuilder: (context, index) {
                   final data = docs[index].data() as Map<String, dynamic>;
                   final rating = data['rating'] ?? 5;
@@ -408,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final device = data['device_type'] ?? '';
 
                   return Container(
-                    width: 280, // Фиксированная ширина карточки для красивого свайпа
+                    width: 280, 
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -460,7 +452,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ВКЛАДКА 1: ГЛАВНАЯ ---
   Widget _buildHomeTab() {
     return Stack(
       children: [
@@ -556,7 +547,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               
               const SizedBox(height: 40),
-              // ВЫЗЫВАЕМ НАШУ КАРУСЕЛЬ ОТЗЫВОВ!
               _buildReviewsCarousel(),
               const SizedBox(height: 40),
           ],
@@ -586,103 +576,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showEnterPromoDialog() {
-    final codeController = TextEditingController();
-    bool isProcessing = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setStateDialog) {
-          return AlertDialog(
-            title: const Text('Активировать код', style: TextStyle(fontWeight: FontWeight.bold)),
-            content: TextField(
-              controller: codeController,
-              decoration: const InputDecoration(labelText: 'Код друга (MSRV-...)', border: OutlineInputBorder()),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена', style: TextStyle(color: Colors.grey))),
-              isProcessing 
-                ? const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator())
-                : ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[700]),
-                    onPressed: () async {
-                      String code = codeController.text.trim().toUpperCase();
-                      if (code.isEmpty) return;
-
-                      setStateDialog(() => isProcessing = true);
-
-                      int referralBonus = 15;
-                      try {
-                        final settings = await FirebaseFirestore.instance.collection('settings').doc('loyalty').get();
-                        if (settings.exists && settings.data()!.containsKey('referral_points')) {
-                          referralBonus = settings.data()!['referral_points'];
-                        }
-                      } catch (e) {
-                        // ignore
-                      }
-
-                      final query = await FirebaseFirestore.instance.collection('clients').where('referral_code', isEqualTo: code).get();
-
-                      if (query.docs.isEmpty) {
-                        setStateDialog(() => isProcessing = false);
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Код не найден!'), backgroundColor: Colors.red));
-                        return;
-                      }
-
-                      final friendPhone = query.docs.first.id;
-                      if (friendPhone == _phone) {
-                        setStateDialog(() => isProcessing = false);
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нельзя использовать свой код!'), backgroundColor: Colors.red));
-                        return;
-                      }
-
-                      final myDoc = await FirebaseFirestore.instance.collection('clients').doc(_phone).get();
-                      if (myDoc.data()?['invited_by'] != null) {
-                        setStateDialog(() => isProcessing = false);
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Вы уже активировали код ранее!'), backgroundColor: Colors.orange));
-                        return;
-                      }
-
-                      await FirebaseFirestore.instance.collection('clients').doc(_phone).update({
-                        'invited_by': friendPhone,
-                        'bonus_points': FieldValue.increment(referralBonus), 
-                      });
-                      await _addBonusHistory(_phone!, referralBonus, 'Активация промокода друга');
-
-                      await FirebaseFirestore.instance.collection('clients').doc(friendPhone).update({
-                        'bonus_points': FieldValue.increment(referralBonus), 
-                      });
-                      await _addBonusHistory(friendPhone, referralBonus, 'Бонус за приглашение друга');
-
-                      if (!mounted) return;
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Промокод активирован! Вам начислено $referralBonus баллов 🎉'), backgroundColor: Colors.green));
-                    },
-                    child: const Text('Активировать', style: TextStyle(color: Colors.white)),
-                  ),
-            ],
-          );
-        }
-      ),
-    );
-  }
-
-  // --- ВКЛАДКА 2: ПРОФИЛЬ ---
   Widget _buildProfileTab() {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('clients').doc(_phone).snapshots(),
       builder: (context, snapshot) {
         int points = 0;
-        String refCode = 'MSRV-XXXX';
 
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           points = data['bonus_points'] as int? ?? 0;
-          refCode = data['referral_code'] as String? ?? 'MSRV-XXXX';
         }
 
         return SingleChildScrollView(
@@ -737,59 +639,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Card(
-                elevation: 0,
-                color: Colors.orange[50],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.orange.shade200)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.card_giftcard, color: Colors.deepOrange),
-                          SizedBox(width: 8),
-                          Text('Пригласи друга', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepOrange)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      const Text('Подарите бонус другу и получите бонус себе после его первого заказа!', style: TextStyle(fontSize: 13, color: Colors.brown)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orange.shade300)),
-                              child: Text(refCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.2)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange, foregroundColor: Colors.white),
-                            onPressed: () {
-                              Share.share('Привет! Скачай приложение M-Service для ремонта техники и введи мой код $refCode, чтобы получить стартовый бонус на ремонт!');
-                            },
-                            child: const Text('Отправить'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: TextButton.icon(
-                          onPressed: _showEnterPromoDialog,
-                          icon: const Icon(Icons.input, size: 18),
-                          label: const Text('У меня есть промокод от друга'),
-                        ),
-                      )
-                    ],
-                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -882,4 +731,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
