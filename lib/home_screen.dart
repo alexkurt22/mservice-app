@@ -11,7 +11,7 @@ import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
-import 'screens/bonus_history_screen.dart'; // ИМПОРТ НОВОГО ЭКРАНА ИСТОРИИ
+import 'screens/bonus_history_screen.dart';
 
 const String CURRENT_APP_VERSION = "1.0.0"; 
 
@@ -28,14 +28,14 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _clientName;
   bool _isLoading = true;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
-  int _maxDiscountPercentUI = 30; // Для отображения текста в профиле
+  int _maxDiscountPercentUI = 30; 
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
     _checkForUpdates();
-    _fetchLoyaltyConfig(); // Подтягиваем настройки для отображения
+    _fetchLoyaltyConfig(); 
   }
 
   @override
@@ -44,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // --- ДИНАМИЧЕСКИЙ ФЕТЧЕР НАСТРОЕК ---
   Future<void> _fetchLoyaltyConfig() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('settings').doc('loyalty').get();
@@ -58,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- ЗАПИСЬ ИСТОРИИ ОПЕРАЦИЙ ---
   Future<void> _addBonusHistory(String phone, int amount, String description) async {
     await FirebaseFirestore.instance.collection('clients').doc(phone).collection('bonus_history').add({
       'amount': amount,
@@ -93,9 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return PopScope(
           canPop: !forceUpdate,
           child: AlertDialog(
-            title: Row(
-              children: const [Icon(Icons.system_update, color: Colors.blue), SizedBox(width: 8), Text('Обновление')],
-            ),
+            title: Row(children: const [Icon(Icons.system_update, color: Colors.blue), SizedBox(width: 8), Text('Обновление')]),
             content: Text(forceUpdate ? 'Вышла важная новая версия!' : 'Доступна новая версия приложения.'),
             actions: [
               if (!forceUpdate) TextButton(onPressed: () => Navigator.pop(context), child: const Text('Позже', style: TextStyle(color: Colors.grey))),
@@ -129,14 +125,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- ДИНАМИЧЕСКАЯ ИНИЦИАЛИЗАЦИЯ И ПРИВЕТСТВЕННЫЙ БОНУС ---
   Future<void> _checkAndInitClientDoc() async {
     if (_phone == null) return;
     final docRef = FirebaseFirestore.instance.collection('clients').doc(_phone);
     final doc = await docRef.get();
     
     if (!doc.exists) {
-      // 1. Узнаем, сколько сейчас положено за регистрацию (по умолчанию 10)
       int welcomePoints = 10;
       try {
         final settings = await FirebaseFirestore.instance.collection('settings').doc('loyalty').get();
@@ -147,7 +141,6 @@ class _HomeScreenState extends State<HomeScreen> {
         debugPrint('Не удалось прочитать настройки: $e');
       }
 
-      // 2. Создаем профиль с динамическим бонусом
       await docRef.set({
         'phone': _phone,
         'name': _clientName ?? 'Клиент',
@@ -156,7 +149,6 @@ class _HomeScreenState extends State<HomeScreen> {
         'created_at': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      // 3. Пишем историю
       if (welcomePoints > 0) {
         await _addBonusHistory(_phone!, welcomePoints, 'Приветственный бонус за регистрацию');
       }
@@ -258,57 +250,220 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- ЛОГИКА ДИАЛОГА ДЛЯ ОТЗЫВА ---
+  void _showReviewDialog(QueryDocumentSnapshot order, Map<String, dynamic> data) {
+    int rating = 5;
+    bool isAnonymous = false;
+    final commentController = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Оцените работу', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18), textAlign: TextAlign.center),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Насколько вы довольны ремонтом?', style: TextStyle(fontSize: 13, color: Colors.blueGrey)),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    return IconButton(
+                      iconSize: 36,
+                      icon: Icon(index < rating ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.orangeAccent),
+                      onPressed: () => setStateDialog(() => rating = index + 1),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: commentController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Напишите пару слов (необязательно)...',
+                    filled: true, fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  title: const Text('Оставить анонимно', style: TextStyle(fontSize: 13)),
+                  value: isAnonymous, dense: true, contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading, activeColor: Colors.blueGrey,
+                  onChanged: (val) => setStateDialog(() => isAnonymous = val ?? false),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx), 
+                child: const Text('Отмена', style: TextStyle(color: Colors.grey))
+              ),
+              isSubmitting 
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                    onPressed: () async {
+                      setStateDialog(() => isSubmitting = true);
+                      
+                      String clientName = data['client_name'] ?? 'Клиент';
+                      if (isAnonymous) {
+                         clientName = clientName.length > 2 ? '${clientName.substring(0, 1)}***' : 'Анонимный клиент';
+                      }
+
+                      try {
+                        await FirebaseFirestore.instance.collection('reviews').add({
+                          'rating': rating,
+                          'text': commentController.text.trim(),
+                          'author_name': clientName,
+                          'device_type': data['device_type'] ?? 'Устройство',
+                          'created_at': FieldValue.serverTimestamp(),
+                        });
+
+                        await order.reference.update({
+                          'is_reviewed': true,
+                          'review_rating': rating,
+                        });
+
+                        if (mounted) {
+                           Navigator.pop(ctx);
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Спасибо! Ваш отзыв опубликован 🎉'), backgroundColor: Colors.green));
+                        }
+                      } catch(e) {
+                         setStateDialog(() => isSubmitting = false);
+                         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+                      }
+                    },
+                    child: const Text('Отправить', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+            ],
+          );
+        }
+      ),
+    );
+  }
+
+  Map<String, dynamic> _getStatusInfo(String status) {
+    switch (status) {
+      case 'new': return {'text': 'Заявка принята, ожидайте', 'color': Colors.blue, 'icon': Icons.access_time_filled};
+      case 'awaiting_approval': return {'text': 'Требует вашего ответа!', 'color': Colors.orange, 'icon': Icons.notification_important};
+      case 'in_progress': return {'text': 'Устройство в ремонте', 'color': Colors.teal, 'icon': Icons.handyman};
+      case 'completed': return {'text': 'Ремонт завершен!', 'color': Colors.green, 'icon': Icons.check_circle}; // НОВЫЙ СТАТУС
+      default: return {'text': 'Обработка...', 'color': Colors.grey, 'icon': Icons.info};
+    }
+  }
+
+  // --- ВКЛАДКА 1: ГЛАВНАЯ (ОБНОВЛЕННАЯ С ЗЕЛЕНОЙ ПЛАШКОЙ) ---
   Widget _buildHomeTab() {
-    // ... [ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ, ТАМ ТОТ ЖЕ САМЫЙ КОД ТРЕКЕРА ЗАКАЗОВ] ...
     return Stack(
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        ListView(
+          padding: const EdgeInsets.only(bottom: 80), // Отступ для нижней кнопки
           children: [
             if (_phone != null)
               StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('status', whereIn: ['new', 'awaiting_approval', 'in_progress']).snapshots(),
+                // Читаем все активные и выполненные заказы
+                stream: FirebaseFirestore.instance.collection('orders')
+                    .where('phone', isEqualTo: _phone)
+                    .where('status', whereIn: ['new', 'awaiting_approval', 'in_progress', 'completed'])
+                    .snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink(); 
-                  final doc = snapshot.data!.docs.first;
-                  final data = doc.data() as Map<String, dynamic>;
-                  String status = data['status'] ?? 'new';
-                  Color color = status == 'new' ? Colors.blue : status == 'awaiting_approval' ? Colors.orange : Colors.teal;
-                  String text = status == 'new' ? 'Заявка принята, ожидайте' : status == 'awaiting_approval' ? 'Требует вашего ответа!' : 'Устройство в ремонте';
-                  IconData icon = status == 'new' ? Icons.access_time_filled : status == 'awaiting_approval' ? Icons.notification_important : Icons.handyman;
-                  return GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen())),
-                    child: Container(
-                      margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(gradient: LinearGradient(colors: [color.withOpacity(0.8), color], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20)),
-                      child: Row(
-                        children: [
-                          CircleAvatar(backgroundColor: Colors.white24, child: Icon(icon, color: Colors.white)),
-                          const SizedBox(width: 16),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                            Text(text, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                          ])),
-                          const Icon(Icons.chevron_right, color: Colors.white),
-                        ],
-                      ),
-                    ),
+                  if (!snapshot.hasData) return const SizedBox.shrink(); 
+                  
+                  // Фильтруем: не показываем выполненные, если уже есть отзыв
+                  final docs = snapshot.data!.docs.where((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    if (data['status'] == 'completed' && data['is_reviewed'] == true) return false;
+                    return true;
+                  }).toList();
+
+                  if (docs.isEmpty) return const SizedBox.shrink();
+
+                  return Column(
+                    children: docs.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      String status = data['status'] ?? 'new';
+                      final statusInfo = _getStatusInfo(status);
+
+                      return GestureDetector(
+                        onTap: () {
+                           if (status != 'completed') {
+                             Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+                           }
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [(statusInfo['color'] as Color).withOpacity(0.8), statusInfo['color']], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [BoxShadow(color: (statusInfo['color'] as Color).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(backgroundColor: Colors.white24, child: Icon(statusInfo['icon'], color: Colors.white)),
+                                  const SizedBox(width: 16),
+                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                  ])),
+                                  if (status != 'completed')
+                                    const Icon(Icons.chevron_right, color: Colors.white),
+                                ],
+                              ),
+                              // --- КНОПКА ОТЗЫВА ПРЯМО НА ЗЕЛЕНОЙ ПЛАШКЕ ---
+                              if (status == 'completed') ...[
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: Colors.green[800],
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        onPressed: () => _showReviewDialog(doc, data),
+                                        icon: const Icon(Icons.star, color: Colors.orange),
+                                        label: const Text('Оставить отзыв', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.close, color: Colors.white),
+                                      tooltip: 'Скрыть',
+                                      onPressed: () async {
+                                        // Скрываем навсегда, если клиент не хочет писать отзыв
+                                        await doc.reference.update({'is_reviewed': true});
+                                      },
+                                    ),
+                                  ],
+                                )
+                              ]
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   );
                 },
               ),
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.video_library, size: 64, color: Colors.grey[300]), const SizedBox(height: 16),
-                      Text('Скоро здесь появятся\nлайфхаки и новости', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
-                    ],
-                  ),
-                ),
-              ),
+              
+              const SizedBox(height: 64),
+              Icon(Icons.video_library, size: 64, color: Colors.grey[300]),
+              const SizedBox(height: 16),
+              Text('Скоро здесь появятся\nлайфхаки и новости', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
           ],
         ),
+
         if (_phone != null)
           Positioned(
             bottom: 16, right: 16,
@@ -333,7 +488,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ДИНАМИЧЕСКИЙ ВВОД ПРОМОКОДА ---
   void _showEnterPromoDialog() {
     final codeController = TextEditingController();
     bool isProcessing = false;
@@ -360,7 +514,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       setStateDialog(() => isProcessing = true);
 
-                      // 1. Узнаем, сколько сейчас положено за реферала (по умолчанию 15)
                       int referralBonus = 15;
                       try {
                         final settings = await FirebaseFirestore.instance.collection('settings').doc('loyalty').get();
@@ -396,7 +549,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         return;
                       }
 
-                      // 2. Начисляем динамический бонус ОБОИМ и ПИШЕМ ИСТОРИЮ
                       await FirebaseFirestore.instance.collection('clients').doc(_phone).update({
                         'invited_by': friendPhone,
                         'bonus_points': FieldValue.increment(referralBonus), 
@@ -467,7 +619,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text('1 балл = 1 TMT. Скидка до $_maxDiscountPercentUI%.', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                        // КНОПКА ИСТОРИИ ПРЯМО НА КАРТОЧКЕ
                         GestureDetector(
                           onTap: () {
                             if (_phone != null) {
@@ -633,3 +784,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
