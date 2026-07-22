@@ -11,7 +11,7 @@ import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
 import 'screens/bonus_history_screen.dart';
-import 'screens/services_catalog_screen.dart'; // Импортируем наш каталог для теста
+import 'screens/services_catalog_screen.dart'; // <--- ПРАВИЛЬНЫЙ ИМПОРТ КАТАЛОГА
 
 const String CURRENT_APP_VERSION = "1.0.0"; 
 
@@ -195,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (await canLaunchUrl(url)) await launchUrl(url);
   }
 
-  // --- ВРЕМЕННО ВЫВОДИМ ОБА ВАРИАНТА ДЛЯ СРАВНЕНИЯ ---
+  // --- ШТОРКА ДЕЙСТВИЙ (ОБА ВАРИАНТА ДЛЯ СРАВНЕНИЯ) ---
   void _showCreateActionSheet() {
     showModalBottomSheet(
       context: context,
@@ -214,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.blue[50],
                 leading: CircleAvatar(backgroundColor: Colors.blue[100], child: Icon(Icons.build_circle, color: Colors.blue[700])),
                 title: const Text('Вызвать мастера / Ремонт', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Вариант 1: Сразу прямая форма заявки', style: TextStyle(fontSize: 12)),
+                subtitle: const Text('Вариант 1: Сразу прямая форма заказа', style: TextStyle(fontSize: 12)),
                 onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen())); },
               ),
               const SizedBox(height: 12),
@@ -223,7 +223,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 leading: CircleAvatar(backgroundColor: Colors.purple[100], child: Icon(Icons.layers, color: Colors.purple[700])),
                 title: const Text('Каталог наших компетенций', style: TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: const Text('Вариант 2: Витрина услуг без цен перед заказом', style: TextStyle(fontSize: 12)),
-                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ServicesCatalogScreen())); },
+                // 🔥 УБРАЛИ ОШИБОЧНЫЙ const ПЕРЕД ServicesCatalogScreen 🔥
+                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => ServicesCatalogScreen())); },
               ),
               const SizedBox(height: 12),
               ListTile(
@@ -691,9 +692,6 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [if (_currentIndex == 1) IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: _logout, tooltip: 'Выйти')],
       ),
       body: IndexedStack(index: _currentIndex, children: [_buildHomeTab(), _buildProfileTab()]),
-      
-      // 🔥 ЖЕЛЕЗОБЕТОННЫЙ ФИКС ДИНАМИЧЕСКОГО ПЛЮСИКА 🔥
-      // Теперь кнопка наглухо привязана к BottomAppBar и не подпрыгивает от уведомлений
       floatingActionButton: FloatingActionButton(
         heroTag: 'create_btn', 
         backgroundColor: Colors.blueGrey[900], 
@@ -703,7 +701,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.add, color: Colors.white, size: 32),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(), 
         notchMargin: 8.0, 
@@ -736,4 +733,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
