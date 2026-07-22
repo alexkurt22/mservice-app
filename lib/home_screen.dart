@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:share_plus/share_plus.dart'; // Для отправки промокода другу
+import 'package:share_plus/share_plus.dart';
 
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
@@ -113,18 +113,16 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_phone != null) {
       _setupPushNotifications();
       _listenToBanHammer(); 
-      _checkAndInitClientDoc(); // Проверяем, есть ли документ клиента в базе для начисления баллов
+      _checkAndInitClientDoc(); 
     }
   }
 
-  // --- ИНИЦИАЛИЗАЦИЯ БАЛЛОВ ПРИ ПЕРВОМ ВХОДЕ ---
   Future<void> _checkAndInitClientDoc() async {
     if (_phone == null) return;
     final docRef = FirebaseFirestore.instance.collection('clients').doc(_phone);
     final doc = await docRef.get();
     
     if (!doc.exists) {
-      // Даем приветственные 10 баллов при первом входе!
       await docRef.set({
         'phone': _phone,
         'name': _clientName ?? 'Клиент',
@@ -407,7 +405,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ДИАЛОГ ВВОДА ПРОМОКОДА ---
   void _showEnterPromoDialog() {
     final codeController = TextEditingController();
     showDialog(
@@ -429,7 +426,6 @@ class _HomeScreenState extends State<HomeScreen> {
               String code = codeController.text.trim().toUpperCase();
               if (code.isEmpty) return;
 
-              // Ищем пользователя с таким промокодом
               final query = await FirebaseFirestore.instance.collection('clients')
                   .where('referral_code', isEqualTo: code)
                   .get();
@@ -447,7 +443,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 return;
               }
 
-              // Проверяем, не вводил ли уже этот пользователь промокод
               final myDoc = await FirebaseFirestore.instance.collection('clients').doc(_phone).get();
               if (myDoc.data()?['invited_by'] != null) {
                 Navigator.pop(context);
@@ -455,14 +450,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 return;
               }
 
-              // Начисляем бонус обоим
               await FirebaseFirestore.instance.collection('clients').doc(_phone).update({
                 'invited_by': friendPhone,
-                'bonus_points': FieldValue.increment(15), // Новичку +15 баллов
+                'bonus_points': FieldValue.increment(15), 
               });
 
               await FirebaseFirestore.instance.collection('clients').doc(friendPhone).update({
-                'bonus_points': FieldValue.increment(15), // Другу +15 баллов
+                'bonus_points': FieldValue.increment(15), 
               });
 
               Navigator.pop(context);
@@ -475,7 +469,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ВКЛАДКА 2: ПРОФИЛЬ С КАРТОЧКОЙ ЛОЯЛЬНОСТИ И РЕФЕРАЛКОЙ ---
+  // --- ВКЛАДКА 2: ПРОФИЛЬ ---
   Widget _buildProfileTab() {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('clients').doc(_phone).snapshots(),
@@ -494,7 +488,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. БАНКОВСКАЯ КАРТА ЛОЯЛЬНОСТИ (БАЛЛЫ)
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -526,7 +519,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 2. БЛОК РЕФЕРАЛЬНОЙ ПРОГРАММЫ
               Card(
                 elevation: 0,
                 color: Colors.orange[50],
@@ -694,7 +686,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onPressed: _showCreateActionSheet,
           child: const Icon(Icons.add, color: Colors.white, size: 32),
         ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDockData ?? FloatingActionButtonLocation.centerDocked,
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
         bottomNavigationBar: BottomAppBar(
           shape: const CircularNotchedRectangle(),
@@ -739,4 +731,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
