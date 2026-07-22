@@ -11,6 +11,7 @@ import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
 import 'screens/bonus_history_screen.dart';
+import 'screens/services_catalog_screen.dart'; // Импортируем наш каталог для теста
 
 const String CURRENT_APP_VERSION = "1.0.0"; 
 
@@ -189,26 +190,12 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
   }
 
-  Future<bool> _onWillPop() async {
-    final shouldPop = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Выход', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Вы действительно хотите выйти?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Нет', style: TextStyle(color: Colors.blueGrey))),
-          TextButton(onPressed: () { Navigator.of(context).pop(true); SystemNavigator.pop(); }, child: const Text('Да', style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    return shouldPop ?? false;
-  }
-
   Future<void> _callAdmin() async {
     final url = Uri.parse('tel:+99363644925');
     if (await canLaunchUrl(url)) await launchUrl(url);
   }
 
+  // --- ВРЕМЕННО ВЫВОДИМ ОБА ВАРИАНТА ДЛЯ СРАВНЕНИЯ ---
   void _showCreateActionSheet() {
     showModalBottomSheet(
       context: context,
@@ -227,8 +214,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.blue[50],
                 leading: CircleAvatar(backgroundColor: Colors.blue[100], child: Icon(Icons.build_circle, color: Colors.blue[700])),
                 title: const Text('Вызвать мастера / Ремонт', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Заявка на ремонт вашей техники', style: TextStyle(fontSize: 12)),
+                subtitle: const Text('Вариант 1: Сразу прямая форма заявки', style: TextStyle(fontSize: 12)),
                 onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen())); },
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.purple[50],
+                leading: CircleAvatar(backgroundColor: Colors.purple[100], child: Icon(Icons.layers, color: Colors.purple[700])),
+                title: const Text('Каталог наших компетенций', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Вариант 2: Витрина услуг без цен перед заказом', style: TextStyle(fontSize: 12)),
+                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ServicesCatalogScreen())); },
               ),
               const SizedBox(height: 12),
               ListTile(
@@ -696,14 +691,24 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [if (_currentIndex == 1) IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: _logout, tooltip: 'Выйти')],
       ),
       body: IndexedStack(index: _currentIndex, children: [_buildHomeTab(), _buildProfileTab()]),
+      
+      // 🔥 ЖЕЛЕЗОБЕТОННЫЙ ФИКС ДИНАМИЧЕСКОГО ПЛЮСИКА 🔥
+      // Теперь кнопка наглухо привязана к BottomAppBar и не подпрыгивает от уведомлений
       floatingActionButton: FloatingActionButton(
-        heroTag: 'create_btn', backgroundColor: Colors.blueGrey[900], elevation: 4,
+        heroTag: 'create_btn', 
+        backgroundColor: Colors.blueGrey[900], 
+        elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        onPressed: _showCreateActionSheet, child: const Icon(Icons.add, color: Colors.white, size: 32),
+        onPressed: _showCreateActionSheet, 
+        child: const Icon(Icons.add, color: Colors.white, size: 32),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      
       bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(), notchMargin: 8.0, color: Colors.white, elevation: 20,
+        shape: const CircularNotchedRectangle(), 
+        notchMargin: 8.0, 
+        color: Colors.white, 
+        elevation: 20,
         child: SizedBox(
           height: 60,
           child: Row(
@@ -731,3 +736,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
