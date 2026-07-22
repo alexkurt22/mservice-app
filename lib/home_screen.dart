@@ -53,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Ошибка загрузки настроек лояльности: $e');
+      debugPrint('Ошибка загрузки настроек: $e');
     }
   }
 
@@ -137,9 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (settings.exists && settings.data()!.containsKey('welcome_points')) {
           welcomePoints = settings.data()!['welcome_points'];
         }
-      } catch (e) {
-        debugPrint('Не удалось прочитать настройки: $e');
-      }
+      } catch (e) {}
 
       await docRef.set({
         'phone': _phone,
@@ -250,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ЛОГИКА ДИАЛОГА ДЛЯ ОТЗЫВА ---
+  // --- ЛОГИКА ДИАЛОГА ДЛЯ ОТЗЫВА (С МОДЕРАЦИЕЙ) ---
   void _showReviewDialog(QueryDocumentSnapshot order, Map<String, dynamic> data) {
     int rating = 5;
     bool isAnonymous = false;
@@ -300,10 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx), 
-                child: const Text('Отмена', style: TextStyle(color: Colors.grey))
-              ),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена', style: TextStyle(color: Colors.grey))),
               isSubmitting 
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
@@ -317,12 +312,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       }
 
                       try {
+                        // Сохраняем в коллекцию отзывов со статусом is_approved: false (отправляем на модерацию)
                         await FirebaseFirestore.instance.collection('reviews').add({
                           'rating': rating,
                           'text': commentController.text.trim(),
                           'author_name': clientName,
                           'device_type': data['device_type'] ?? 'Устройство',
                           'created_at': FieldValue.serverTimestamp(),
+                          'is_approved': false, // <--- ФЛАГ МОДЕРАЦИИ
                         });
 
                         await order.reference.update({
@@ -332,7 +329,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         if (mounted) {
                            Navigator.pop(ctx);
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Спасибо! Ваш отзыв опубликован 🎉'), backgroundColor: Colors.green));
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                             content: Text('Спасибо! Отзыв отправлен на проверку.'), 
+                             backgroundColor: Colors.green
+                           ));
                         }
                       } catch(e) {
                          setStateDialog(() => isSubmitting = false);
@@ -353,21 +353,122 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'new': return {'text': 'Заявка принята, ожидайте', 'color': Colors.blue, 'icon': Icons.access_time_filled};
       case 'awaiting_approval': return {'text': 'Требует вашего ответа!', 'color': Colors.orange, 'icon': Icons.notification_important};
       case 'in_progress': return {'text': 'Устройство в ремонте', 'color': Colors.teal, 'icon': Icons.handyman};
-      case 'completed': return {'text': 'Ремонт завершен!', 'color': Colors.green, 'icon': Icons.check_circle}; // НОВЫЙ СТАТУС
+      case 'completed': return {'text': 'Ремонт завершен!', 'color': Colors.green, 'icon': Icons.check_circle};
       default: return {'text': 'Обработка...', 'color': Colors.grey, 'icon': Icons.info};
     }
   }
 
-  // --- ВКЛАДКА 1: ГЛАВНАЯ (ОБНОВЛЕННАЯ С ЗЕЛЕНОЙ ПЛАШКОЙ) ---
+  // --- ВИДЖЕТ: КАРУСЕЛЬ ОТЗЫВОВ ---
+  Widget _buildReviewsCarousel() {
+    return StreamBuilder<QuerySnapshot>(
+      // Берем ТОЛЬКО одобренные админом отзывы
+      stream: FirebaseFirestore.instance.collection('reviews').where('is_approved', isEqualTo: true).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          // Если отзывов пока нет, показываем красивую заглушку
+          return Column(
+            children: [
+              Icon(Icons.forum, size: 64, color: Colors.grey[300]),
+              const SizedBox(height: 16),
+              Text('Здесь будут отзывы\nнаших клиентов', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+            ],
+          );
+        }
+
+        var docs = snapshot.data!.docs;
+        // Сортируем локально по дате (самые новые слева), чтобы избежать ошибок с индексами Firebase
+        docs.sort((a, b) {
+          final aData = a.data() as Map<String, dynamic>;
+          final bData = b.data() as Map<String, dynamic>;
+          final aTime = aData['created_at'] as Timestamp?;
+          final bTime = bData['created_at'] as Timestamp?;
+          if (aTime == null || bTime == null) return 0;
+          return bTime.compareTo(aTime);
+        });
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text('Отзывы наших клиентов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 160,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: docs.length > 10 ? 10 : docs.length, // Показываем максимум 10 последних
+                itemBuilder: (context, index) {
+                  final data = docs[index].data() as Map<String, dynamic>;
+                  final rating = data['rating'] ?? 5;
+                  final text = data['text'] ?? '';
+                  final author = data['author_name'] ?? 'Клиент';
+                  final device = data['device_type'] ?? '';
+
+                  return Container(
+                    width: 280, // Фиксированная ширина карточки для красивого свайпа
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4))],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(author, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Row(
+                              children: List.generate(5, (starIdx) => Icon(
+                                starIdx < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                                color: Colors.orangeAccent,
+                                size: 16,
+                              )),
+                            )
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(device, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: Text(
+                            text.isEmpty ? 'Оценка без текста' : text,
+                            style: TextStyle(
+                              color: text.isEmpty ? Colors.grey : Colors.black87, 
+                              fontStyle: text.isEmpty ? FontStyle.italic : FontStyle.normal, 
+                              fontSize: 13
+                            ),
+                            maxLines: 4,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- ВКЛАДКА 1: ГЛАВНАЯ ---
   Widget _buildHomeTab() {
     return Stack(
       children: [
         ListView(
-          padding: const EdgeInsets.only(bottom: 80), // Отступ для нижней кнопки
+          padding: const EdgeInsets.only(bottom: 80),
           children: [
             if (_phone != null)
               StreamBuilder<QuerySnapshot>(
-                // Читаем все активные и выполненные заказы
                 stream: FirebaseFirestore.instance.collection('orders')
                     .where('phone', isEqualTo: _phone)
                     .where('status', whereIn: ['new', 'awaiting_approval', 'in_progress', 'completed'])
@@ -375,7 +476,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const SizedBox.shrink(); 
                   
-                  // Фильтруем: не показываем выполненные, если уже есть отзыв
                   final docs = snapshot.data!.docs.where((doc) {
                     final data = doc.data() as Map<String, dynamic>;
                     if (data['status'] == 'completed' && data['is_reviewed'] == true) return false;
@@ -419,7 +519,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                     const Icon(Icons.chevron_right, color: Colors.white),
                                 ],
                               ),
-                              // --- КНОПКА ОТЗЫВА ПРЯМО НА ЗЕЛЕНОЙ ПЛАШКЕ ---
                               if (status == 'completed') ...[
                                 const SizedBox(height: 16),
                                 Row(
@@ -441,7 +540,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                       icon: const Icon(Icons.close, color: Colors.white),
                                       tooltip: 'Скрыть',
                                       onPressed: () async {
-                                        // Скрываем навсегда, если клиент не хочет писать отзыв
                                         await doc.reference.update({'is_reviewed': true});
                                       },
                                     ),
@@ -457,10 +555,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               
-              const SizedBox(height: 64),
-              Icon(Icons.video_library, size: 64, color: Colors.grey[300]),
-              const SizedBox(height: 16),
-              Text('Скоро здесь появятся\nлайфхаки и новости', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+              const SizedBox(height: 40),
+              // ВЫЗЫВАЕМ НАШУ КАРУСЕЛЬ ОТЗЫВОВ!
+              _buildReviewsCarousel(),
+              const SizedBox(height: 40),
           ],
         ),
 
