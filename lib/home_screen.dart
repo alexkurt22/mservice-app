@@ -5,14 +5,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart'; // Для отправки промокода другу
 
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
 
-// === ТЕКУЩАЯ ВЕРСИЯ ПРИЛОЖЕНИЯ ===
-// Когда будешь делать обновления, меняй эту цифру здесь и компилируй новый APK.
 const String CURRENT_APP_VERSION = "1.0.0"; 
 
 class HomeScreen extends StatefulWidget {
@@ -33,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadUserData();
-    _checkForUpdates(); // Проверяем обновления при старте!
+    _checkForUpdates();
   }
 
   @override
@@ -42,7 +41,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // --- СИСТЕМА АВТООБНОВЛЕНИЯ (OTA) ---
   Future<void> _checkForUpdates() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('settings').doc('app_info').get();
@@ -52,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> {
         final downloadUrl = data['download_url'] as String?;
         final forceUpdate = data['force_update'] as bool? ?? false;
 
-        // Если версия в базе отличается от версии в коде - предлагаем обновить
         if (latestVersion != null && latestVersion != CURRENT_APP_VERSION && downloadUrl != null && downloadUrl.isNotEmpty) {
           _showUpdateDialog(downloadUrl, forceUpdate);
         }
@@ -65,10 +62,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showUpdateDialog(String downloadUrl, bool forceUpdate) {
     showDialog(
       context: context,
-      barrierDismissible: !forceUpdate, // Если forceUpdate = true, нельзя закрыть окно мимо кнопки
+      barrierDismissible: !forceUpdate,
       builder: (context) {
         return PopScope(
-          canPop: !forceUpdate, // Блокируем кнопку "Назад" на телефоне для обязательных обновлений
+          canPop: !forceUpdate,
           child: AlertDialog(
             title: Row(
               children: const [
@@ -93,7 +90,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () async {
                   final uri = Uri.parse(downloadUrl);
                   if (await canLaunchUrl(uri)) {
-                    // LaunchMode.externalApplication заставит Android открыть браузер (Chrome) и скачать APK
                     await launchUrl(uri, mode: LaunchMode.externalApplication);
                   }
                 },
@@ -117,6 +113,25 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_phone != null) {
       _setupPushNotifications();
       _listenToBanHammer(); 
+      _checkAndInitClientDoc(); // Проверяем, есть ли документ клиента в базе для начисления баллов
+    }
+  }
+
+  // --- ИНИЦИАЛИЗАЦИЯ БАЛЛОВ ПРИ ПЕРВОМ ВХОДЕ ---
+  Future<void> _checkAndInitClientDoc() async {
+    if (_phone == null) return;
+    final docRef = FirebaseFirestore.instance.collection('clients').doc(_phone);
+    final doc = await docRef.get();
+    
+    if (!doc.exists) {
+      // Даем приветственные 10 баллов при первом входе!
+      await docRef.set({
+        'phone': _phone,
+        'name': _clientName ?? 'Клиент',
+        'bonus_points': 10,
+        'referral_code': 'MSRV-${_phone!.substring(_phone!.length > 4 ? _phone!.length - 4 : 0)}',
+        'created_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
   }
 
@@ -272,11 +287,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- ВКЛАДКА 1: ГЛАВНАЯ (ИСПРАВЛЕННАЯ С ЧАТОМ) ---
+  // --- ВКЛАДКА 1: ГЛАВНАЯ ---
   Widget _buildHomeTab() {
     return Stack(
       children: [
-        // Основной контент
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -351,7 +365,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
 
-        // --- КНОПКА ЧАТА (ТЕПЕРЬ ПЛАВАЕТ ПРАВИЛЬНО, НЕ МЕШАЯ ПЛЮСИКУ) ---
         if (_phone != null)
           Positioned(
             bottom: 16,
@@ -378,7 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   backgroundColor: Colors.red,
                   offset: const Offset(-4, -4),
                   child: FloatingActionButton(
-                    heroTag: 'chat_btn', // ВАЖНО: чтобы не конфликтовало с плюсиком
+                    heroTag: 'chat_btn',
                     onPressed: () {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
                     },
@@ -394,72 +407,222 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ВКЛАДКА 2: ПРОФИЛЬ ---
-  Widget _buildProfileTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Card(
-            elevation: 0,
-            color: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  CircleAvatar(radius: 40, backgroundColor: Colors.blueGrey[100], child: const Icon(Icons.person, size: 40, color: Colors.blueGrey)),
-                  const SizedBox(height: 16),
-                  Text(_clientName ?? 'Клиент', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(_phone ?? '', style: const TextStyle(fontSize: 16, color: Colors.grey)),
-                ],
-              ),
-            ),
+  // --- ДИАЛОГ ВВОДА ПРОМОКОДА ---
+  void _showEnterPromoDialog() {
+    final codeController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Активировать промокод', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: codeController,
+          decoration: const InputDecoration(
+            labelText: 'Введите код друга (напр. MSRV-1234)',
+            border: OutlineInputBorder(),
           ),
-          const SizedBox(height: 24),
-          const Text('МОЙ АККАУНТ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('orders')
-                .where('phone', isEqualTo: _phone)
-                .where('has_unread_update', isEqualTo: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              int unreadCount = 0;
-              if (snapshot.hasData) {
-                unreadCount = snapshot.data!.docs.length;
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[700]),
+            onPressed: () async {
+              String code = codeController.text.trim().toUpperCase();
+              if (code.isEmpty) return;
+
+              // Ищем пользователя с таким промокодом
+              final query = await FirebaseFirestore.instance.collection('clients')
+                  .where('referral_code', isEqualTo: code)
+                  .get();
+
+              if (query.docs.isEmpty) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Промокод не найден!'), backgroundColor: Colors.red));
+                return;
               }
 
-              return Badge(
-                isLabelVisible: unreadCount > 0,
-                label: Text(unreadCount.toString()),
-                offset: const Offset(-4, -4),
-                child: _buildMenuCard(
-                  title: 'Мои заказы',
-                  subtitle: 'История ремонтов и статусы',
-                  icon: Icons.list_alt,
-                  iconColor: Colors.blueGrey[700]!,
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
-                  },
-                ),
-              );
+              final friendPhone = query.docs.first.id;
+              if (friendPhone == _phone) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нельзя использовать свой собственный код!'), backgroundColor: Colors.red));
+                return;
+              }
+
+              // Проверяем, не вводил ли уже этот пользователь промокод
+              final myDoc = await FirebaseFirestore.instance.collection('clients').doc(_phone).get();
+              if (myDoc.data()?['invited_by'] != null) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Вы уже активировали чужой промокод ранее!'), backgroundColor: Colors.orange));
+                return;
+              }
+
+              // Начисляем бонус обоим
+              await FirebaseFirestore.instance.collection('clients').doc(_phone).update({
+                'invited_by': friendPhone,
+                'bonus_points': FieldValue.increment(15), // Новичку +15 баллов
+              });
+
+              await FirebaseFirestore.instance.collection('clients').doc(friendPhone).update({
+                'bonus_points': FieldValue.increment(15), // Другу +15 баллов
+              });
+
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Промокод успешно активирован! Вам начислено 15 баллов 🎉'), backgroundColor: Colors.green));
             },
-          ),
-          const SizedBox(height: 16),
-          _buildMenuCard(
-            title: 'Служба поддержки',
-            subtitle: 'Связь с администратором',
-            icon: Icons.headset_mic,
-            iconColor: Colors.teal[700]!,
-            onTap: _callAdmin,
+            child: const Text('Активировать', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
+    );
+  }
+
+  // --- ВКЛАДКА 2: ПРОФИЛЬ С КАРТОЧКОЙ ЛОЯЛЬНОСТИ И РЕФЕРАЛКОЙ ---
+  Widget _buildProfileTab() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('clients').doc(_phone).snapshots(),
+      builder: (context, snapshot) {
+        int points = 10;
+        String refCode = 'MSRV-XXXX';
+
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          points = data['bonus_points'] as int? ?? 10;
+          refCode = data['referral_code'] as String? ?? 'MSRV-XXXX';
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. БАНКОВСКАЯ КАРТА ЛОЯЛЬНОСТИ (БАЛЛЫ)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 5))],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('M-SERVICE BONUS', style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.5, fontSize: 12)),
+                        Icon(Icons.stars_rounded, color: Colors.orangeAccent[400], size: 28),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text('Ваш баланс баллов:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    Text('$points баллов', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 12),
+                    const Text('1 балл = 1 TMT. Скидка до 30% на ремонт.', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 2. БЛОК РЕФЕРАЛЬНОЙ ПРОГРАММЫ
+              Card(
+                elevation: 0,
+                color: Colors.orange[50],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.orange.shade200)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.card_giftcard, color: Colors.deepOrange),
+                          SizedBox(width: 8),
+                          Text('Пригласи друга', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepOrange)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text('Дарите друзьям 15 баллов и получайте 15 баллов себе после их заказа!', style: TextStyle(fontSize: 13, color: Colors.brown)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orange.shade300)),
+                              child: Text(refCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.2)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange, foregroundColor: Colors.white),
+                            onPressed: () {
+                              Share.share('Привет! Скачай приложение M-Service для ремонта техники и введи мой код $refCode, чтобы получить стартовый бонус!');
+                            },
+                            child: const Text('Поделиться'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          onPressed: _showEnterPromoDialog,
+                          icon: const Icon(Icons.input, size: 18),
+                          label: const Text('У меня есть промокод от друга'),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              const Text('МОЙ АККАУНТ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+              const SizedBox(height: 12),
+              
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('orders')
+                    .where('phone', isEqualTo: _phone)
+                    .where('has_unread_update', isEqualTo: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  int unreadCount = 0;
+                  if (snapshot.hasData) {
+                    unreadCount = snapshot.data!.docs.length;
+                  }
+
+                  return Badge(
+                    isLabelVisible: unreadCount > 0,
+                    label: Text(unreadCount.toString()),
+                    offset: const Offset(-4, -4),
+                    child: _buildMenuCard(
+                      title: 'Мои заказы',
+                      subtitle: 'История ремонтов и статусы',
+                      icon: Icons.list_alt,
+                      iconColor: Colors.blueGrey[700]!,
+                      onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+                      },
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildMenuCard(
+                title: 'Служба поддержки',
+                subtitle: 'Связь с администратором',
+                icon: Icons.headset_mic,
+                iconColor: Colors.teal[700]!,
+                onTap: _callAdmin,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -523,7 +686,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
 
-        // --- ВОЗВРАЩЕННАЯ КНОПКА "+" ПО ЦЕНТРУ ---
         floatingActionButton: FloatingActionButton(
           heroTag: 'create_btn',
           backgroundColor: Colors.blueGrey[900],
@@ -532,9 +694,8 @@ class _HomeScreenState extends State<HomeScreen> {
           onPressed: _showCreateActionSheet,
           child: const Icon(Icons.add, color: Colors.white, size: 32),
         ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDockData ?? FloatingActionButtonLocation.centerDocked,
 
-        // НИЖНЯЯ ПАНЕЛЬ С ВЫРЕЗОМ
         bottomNavigationBar: BottomAppBar(
           shape: const CircularNotchedRectangle(),
           notchMargin: 8.0,
