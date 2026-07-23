@@ -10,8 +10,8 @@ import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
-import 'screens/bonus_history_screen.dart';
-import 'screens/services_catalog_screen.dart'; // <--- ПРАВИЛЬНЫЙ ИМПОРТ КАТАЛОГА
+import 'screens/services_catalog_screen.dart';
+import 'screens/profile_screen.dart'; // <--- ПОДКЛЮЧИЛИ НОВЫЙ ЧИСТЫЙ ПРОФИЛЬ
 
 const String CURRENT_APP_VERSION = "1.0.0"; 
 
@@ -78,9 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _showUpdateDialog(downloadUrl, forceUpdate);
         }
       }
-    } catch (e) {
-      debugPrint('Ошибка обновления: $e');
-    }
+    } catch (e) {}
   }
 
   void _showUpdateDialog(String downloadUrl, bool forceUpdate) {
@@ -147,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }, SetOptions(merge: true));
 
       if (welcomePoints > 0) {
-        await _addBonusHistory(_phone!, welcomePoints, 'Приветственный бонус за регистрацию');
+        await _addBonusHistory(_phone!, welcomePoints, 'Приветственный бонус');
       }
     }
   }
@@ -182,20 +180,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await messaging.subscribeToTopic('all_users');
   }
 
-  Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    _userSubscription?.cancel();
-    if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
-  }
-
-  Future<void> _callAdmin() async {
-    final url = Uri.parse('tel:+99363644925');
-    if (await canLaunchUrl(url)) await launchUrl(url);
-  }
-
-  // --- ШТОРКА ДЕЙСТВИЙ (ОБА ВАРИАНТА ДЛЯ СРАВНЕНИЯ) ---
   void _showCreateActionSheet() {
     showModalBottomSheet(
       context: context,
@@ -214,27 +198,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.blue[50],
                 leading: CircleAvatar(backgroundColor: Colors.blue[100], child: Icon(Icons.build_circle, color: Colors.blue[700])),
                 title: const Text('Вызвать мастера / Ремонт', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Вариант 1: Сразу прямая форма заказа', style: TextStyle(fontSize: 12)),
+                subtitle: const Text('Сразу прямая форма заказа', style: TextStyle(fontSize: 12)),
                 onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen())); },
               ),
               const SizedBox(height: 12),
               ListTile(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.purple[50],
                 leading: CircleAvatar(backgroundColor: Colors.purple[100], child: Icon(Icons.layers, color: Colors.purple[700])),
-                title: const Text('Каталог наших компетенций', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Вариант 2: Витрина услуг без цен перед заказом', style: TextStyle(fontSize: 12)),
-                // 🔥 УБРАЛИ ОШИБОЧНЫЙ const ПЕРЕД ServicesCatalogScreen 🔥
-                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => ServicesCatalogScreen())); },
+                title: const Text('Каталог наших услуг', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Витрина услуг перед заказом', style: TextStyle(fontSize: 12)),
+                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ServicesCatalogScreen())); },
               ),
-              const SizedBox(height: 12),
-              ListTile(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.orange[50],
-                leading: CircleAvatar(backgroundColor: Colors.orange[100], child: Icon(Icons.shopping_bag, color: Colors.orange[700])),
-                title: const Text('Магазин товаров', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Комплектующие и аксессуары', style: TextStyle(fontSize: 12)),
-                onTap: () { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скоро открытие.'))); },
-              ),
-              const SizedBox(height: 24), 
             ],
           ),
         );
@@ -276,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   controller: commentController,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    hintText: 'Напишите пару слов (необязательно)...',
+                    hintText: 'Напишите пару слов...',
                     filled: true, fillColor: Colors.grey[100],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
@@ -295,13 +269,13 @@ class _HomeScreenState extends State<HomeScreen> {
               isSubmitting 
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600]),
                     onPressed: () async {
                       setStateDialog(() => isSubmitting = true);
                       
                       String clientName = data['client_name'] ?? 'Клиент';
                       if (isAnonymous) {
-                         clientName = clientName.length > 2 ? '${clientName.substring(0, 1)}***' : 'Анонимный клиент';
+                         clientName = clientName.length > 2 ? '${clientName.substring(0, 1)}***' : 'Аноним';
                       }
 
                       try {
@@ -314,24 +288,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           'is_approved': false, 
                         });
 
-                        await order.reference.update({
-                          'is_reviewed': true,
-                          'review_rating': rating,
-                        });
+                        await order.reference.update({'is_reviewed': true, 'review_rating': rating});
 
                         if (mounted) {
                            Navigator.pop(ctx);
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                             content: Text('Спасибо! Отзыв отправлен на проверку.'), 
-                             backgroundColor: Colors.green
-                           ));
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Отзыв отправлен!'), backgroundColor: Colors.green));
                         }
                       } catch(e) {
                          setStateDialog(() => isSubmitting = false);
                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
                       }
                     },
-                    child: const Text('Отправить', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: const Text('Отправить', style: TextStyle(color: Colors.white)),
                   ),
             ],
           );
@@ -342,10 +310,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Map<String, dynamic> _getStatusInfo(String status) {
     switch (status) {
-      case 'new': return {'text': 'Заявка принята, ожидайте', 'color': Colors.blue, 'icon': Icons.access_time_filled};
-      case 'awaiting_approval': return {'text': 'Требует вашего ответа!', 'color': Colors.orange, 'icon': Icons.notification_important};
-      case 'in_progress': return {'text': 'Устройство в ремонте', 'color': Colors.teal, 'icon': Icons.handyman};
-      case 'completed': return {'text': 'Ремонт завершен!', 'color': Colors.green, 'icon': Icons.check_circle};
+      case 'new': return {'text': 'Принята, ожидайте', 'color': Colors.blue, 'icon': Icons.access_time_filled};
+      case 'awaiting_approval': return {'text': 'Требует ответа!', 'color': Colors.orange, 'icon': Icons.notification_important};
+      case 'in_progress': return {'text': 'В ремонте', 'color': Colors.teal, 'icon': Icons.handyman};
+      case 'completed': return {'text': 'Завершен!', 'color': Colors.green, 'icon': Icons.check_circle};
       default: return {'text': 'Обработка...', 'color': Colors.grey, 'icon': Icons.info};
     }
   }
@@ -359,27 +327,18 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(Icons.forum, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 16),
-              Text('Здесь будут отзывы\nнаших клиентов', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+              Text('Здесь будут отзывы', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500], fontSize: 16)),
             ],
           );
         }
 
         var docs = snapshot.data!.docs;
-        docs.sort((a, b) {
-          final aData = a.data() as Map<String, dynamic>;
-          final bData = b.data() as Map<String, dynamic>;
-          final aTime = aData['created_at'] as Timestamp?;
-          final bTime = bData['created_at'] as Timestamp?;
-          if (aTime == null || bTime == null) return 0;
-          return bTime.compareTo(aTime);
-        });
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text('Отзывы наших клиентов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+              child: Text('Отзывы клиентов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -387,23 +346,16 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: docs.length > 10 ? 10 : docs.length,
+                itemCount: docs.length,
                 itemBuilder: (context, index) {
                   final data = docs[index].data() as Map<String, dynamic>;
-                  final rating = data['rating'] ?? 5;
-                  final text = data['text'] ?? '';
-                  final author = data['author_name'] ?? 'Клиент';
-                  final device = data['device_type'] ?? '';
-
                   return Container(
                     width: 280, 
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.white, borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: Colors.grey.shade200),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4))],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,31 +363,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(author, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            Row(
-                              children: List.generate(5, (starIdx) => Icon(
-                                starIdx < rating ? Icons.star_rounded : Icons.star_border_rounded,
-                                color: Colors.orangeAccent,
-                                size: 16,
-                              )),
-                            )
+                            Text(data['author_name'] ?? 'Клиент', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Row(children: List.generate(5, (starIdx) => Icon(starIdx < (data['rating'] ?? 5) ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.orangeAccent, size: 16)))
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(device, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                        Text(data['device_type'] ?? '', style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                         const SizedBox(height: 8),
-                        Expanded(
-                          child: Text(
-                            text.isEmpty ? 'Оценка без текста' : text,
-                            style: TextStyle(
-                              color: text.isEmpty ? Colors.grey : Colors.black87, 
-                              fontStyle: text.isEmpty ? FontStyle.italic : FontStyle.normal, 
-                              fontSize: 13
-                            ),
-                            maxLines: 4,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                        Expanded(child: Text(data['text'] ?? '', maxLines: 4, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
                       ],
                     ),
                   );
@@ -456,19 +391,14 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             if (_phone != null)
               StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('orders')
-                    .where('phone', isEqualTo: _phone)
-                    .where('status', whereIn: ['new', 'awaiting_approval', 'in_progress', 'completed'])
-                    .snapshots(),
+                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('status', whereIn: ['new', 'awaiting_approval', 'in_progress', 'completed']).snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const SizedBox.shrink(); 
-                  
                   final docs = snapshot.data!.docs.where((doc) {
                     final data = doc.data() as Map<String, dynamic>;
                     if (data['status'] == 'completed' && data['is_reviewed'] == true) return false;
                     return true;
                   }).toList();
-
                   if (docs.isEmpty) return const SizedBox.shrink();
 
                   return Column(
@@ -479,9 +409,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       return GestureDetector(
                         onTap: () {
-                           if (status != 'completed') {
-                             Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
-                           }
+                           if (status != 'completed') Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
                         },
                         child: Container(
                           margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
@@ -489,7 +417,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           decoration: BoxDecoration(
                             gradient: LinearGradient(colors: [(statusInfo['color'] as Color).withOpacity(0.8), statusInfo['color']], begin: Alignment.topLeft, end: Alignment.bottomRight),
                             borderRadius: BorderRadius.circular(20),
-                            boxShadow: [BoxShadow(color: (statusInfo['color'] as Color).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -502,8 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                                     Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
                                   ])),
-                                  if (status != 'completed')
-                                    const Icon(Icons.chevron_right, color: Colors.white),
+                                  if (status != 'completed') const Icon(Icons.chevron_right, color: Colors.white),
                                 ],
                               ),
                               if (status == 'completed') ...[
@@ -512,24 +438,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   children: [
                                     Expanded(
                                       child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.white,
-                                          foregroundColor: Colors.green[800],
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        ),
-                                        onPressed: () => _showReviewDialog(doc, data),
-                                        icon: const Icon(Icons.star, color: Colors.orange),
-                                        label: const Text('Оставить отзыв', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.green[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                        onPressed: () => _showReviewDialog(doc, data), icon: const Icon(Icons.star, color: Colors.orange), label: const Text('Оставить отзыв'),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.close, color: Colors.white),
-                                      tooltip: 'Скрыть',
-                                      onPressed: () async {
-                                        await doc.reference.update({'is_reviewed': true});
-                                      },
-                                    ),
+                                    IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () async { await doc.reference.update({'is_reviewed': true}); }),
                                   ],
                                 )
                               ]
@@ -541,13 +455,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
-              
               const SizedBox(height: 40),
               _buildReviewsCarousel(),
               const SizedBox(height: 40),
           ],
         ),
-
         if (_phone != null)
           Positioned(
             bottom: 16, right: 16,
@@ -572,115 +484,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProfileTab() {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('clients').doc(_phone).snapshots(),
-      builder: (context, snapshot) {
-        int points = 0;
-
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          points = data['bonus_points'] as int? ?? 0;
-        }
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF1E293B), Color(0xFF0F172A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 5))],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('M-SERVICE BONUS', style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.5, fontSize: 12)),
-                        Icon(Icons.stars_rounded, color: Colors.orangeAccent[400], size: 28),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    const Text('Ваш баланс баллов:', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text('$points баллов', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('1 балл = 1 TMT. Скидка до $_maxDiscountPercentUI%.', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                        GestureDetector(
-                          onTap: () {
-                            if (_phone != null) {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => BonusHistoryScreen(phone: _phone!)));
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(20)),
-                            child: const Row(
-                              children: [
-                                Text('История', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                                Icon(Icons.chevron_right, color: Colors.white, size: 16),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              const Text('МОЙ АККАУНТ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
-              const SizedBox(height: 12),
-              
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('has_unread_update', isEqualTo: true).snapshots(),
-                builder: (context, snapshot) {
-                  int unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
-                  return Badge(
-                    isLabelVisible: unreadCount > 0, label: Text(unreadCount.toString()), offset: const Offset(-4, -4),
-                    child: _buildMenuCard(title: 'Мои заказы', subtitle: 'История ремонтов и статусы', icon: Icons.list_alt, iconColor: Colors.blueGrey[700]!, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()))),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildMenuCard(title: 'Служба поддержки', subtitle: 'Связь с администратором', icon: Icons.headset_mic, iconColor: Colors.teal[700]!, onTap: _callAdmin),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: ListTile(
-            leading: CircleAvatar(backgroundColor: iconColor.withOpacity(0.1), child: Icon(icon, color: iconColor)),
-            title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-            subtitle: Text(subtitle, style: TextStyle(color: Colors.blueGrey[400], fontSize: 13)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_phone == null || _isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -689,23 +492,23 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white, elevation: 0,
         title: Text(_currentIndex == 0 ? 'M-Service' : 'Профиль', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 24)),
-        actions: [if (_currentIndex == 1) IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: _logout, tooltip: 'Выйти')],
       ),
-      body: IndexedStack(index: _currentIndex, children: [_buildHomeTab(), _buildProfileTab()]),
+      // 🔥 ЗДЕСЬ МЫ ВЫЗЫВАЕМ НАШ НОВЫЙ ЧИСТЫЙ ЭКРАН ПРОФИЛЯ! 🔥
+      body: IndexedStack(
+        index: _currentIndex, 
+        children: [
+          _buildHomeTab(), 
+          ProfileScreen(phone: _phone!, maxDiscountPercent: _maxDiscountPercentUI),
+        ]
+      ),
       floatingActionButton: FloatingActionButton(
-        heroTag: 'create_btn', 
-        backgroundColor: Colors.blueGrey[900], 
-        elevation: 4,
+        heroTag: 'create_btn', backgroundColor: Colors.blueGrey[900], elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        onPressed: _showCreateActionSheet, 
-        child: const Icon(Icons.add, color: Colors.white, size: 32),
+        onPressed: _showCreateActionSheet, child: const Icon(Icons.add, color: Colors.white, size: 32),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(), 
-        notchMargin: 8.0, 
-        color: Colors.white, 
-        elevation: 20,
+        shape: const CircularNotchedRectangle(), notchMargin: 8.0, color: Colors.white, elevation: 20,
         child: SizedBox(
           height: 60,
           child: Row(
@@ -733,3 +536,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
