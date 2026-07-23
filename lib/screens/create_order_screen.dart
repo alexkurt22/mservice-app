@@ -17,6 +17,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   String? _selectedDirection; 
   String? _selectedSubCategory; 
   
+  // --- СПОСОБ ОПЛАТЫ ---
+  String _selectedPaymentMethod = 'Наличные';
+  final List<String> _paymentMethods = [
+    'Наличные',
+    'Банковская карта',
+    'Перечисление',
+    'Оплата бонусами'
+  ];
+  
   bool _isLoadingCategories = true; 
   bool _isLoading = false; 
 
@@ -89,6 +98,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         'category': _selectedDirection, // Глобальное направление
         'device_type': _selectedSubCategory, // Конкретная услуга
         'problem': _problemController.text.trim(),
+        'payment_method': _selectedPaymentMethod, // 🔥 СОХРАНЯЕМ СПОСОБ ОПЛАТЫ
         'status': 'new',
         'created_at': FieldValue.serverTimestamp(),
         'has_unread_update': false,
@@ -183,6 +193,33 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
                         .toList(),
                     onChanged: _selectedDirection == null ? null : (val) => setState(() => _selectedSubCategory = val),
+                  ),
+
+                  // 🔥 НОВЫЙ БЛОК: СПОСОБ ОПЛАТЫ 🔥
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Способ оплаты',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _selectedPaymentMethod,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.blueGrey[800]!, width: 2)),
+                      prefixIcon: const Icon(Icons.payment, color: Colors.blueGrey),
+                    ),
+                    items: _paymentMethods
+                        .map<DropdownMenuItem<String>>((String method) => DropdownMenuItem<String>(value: method, child: Text(method)))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedPaymentMethod = val);
+                      }
+                    },
                   ),
                   
                   const SizedBox(height: 24),
