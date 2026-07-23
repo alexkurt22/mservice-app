@@ -22,6 +22,62 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? _currentCheckingPhone;
 
+  // --- ЛОГИКА ЗАХВАТА ОЖИДАЮЩИХ БАЛЛОВ ---
+  Future<void> _capturePendingBonuses(String phone) async {
+    try {
+      final db = FirebaseFirestore.instance;
+      final pendingSnapshot = await db
+          .collection('bonus_transactions')
+          .where('recipient_phone', isEqualTo: phone)
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      if (pendingSnapshot.docs.isEmpty) return; // Нет ожидающих баллов
+
+      int totalBonus = 0;
+      final batch = db.batch();
+      final clientRef = db.collection('clients').doc(phone);
+
+      for (var doc in pendingSnapshot.docs) {
+        final data = doc.data();
+        final amount = data['amount'] as int? ?? 0;
+        final senderPhone = data['sender_phone'] ?? 'Друг';
+        
+        totalBonus += amount;
+
+        // 1. Меняем статус транзакции на completed
+        batch.update(doc.reference, {'status': 'completed'});
+
+        // 2. Добавляем запись в историю бонусов клиента
+        final historyRef = clientRef.collection('bonus_history').doc();
+        batch.set(historyRef, {
+          'amount': amount,
+          'description': 'Подарок от $senderPhone',
+          'created_at': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // 3. Зачисляем баллы на баланс клиента (используем increment для безопасности)
+      batch.set(clientRef, {
+        'bonus_points': FieldValue.increment(totalBonus)
+      }, SetOptions(merge: true));
+
+      // Отправляем все изменения разом
+      await batch.commit();
+
+      // Показываем красивое уведомление
+      if (mounted && totalBonus > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Вам зачислено $totalBonus подарочных баллов от друзей! 🎉'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 5),
+        ));
+      }
+    } catch (e) {
+      debugPrint('Ошибка при начислении ожидающих баллов: $e');
+    }
+  }
+
   Future<void> _submit() async {
     setState(() => _isLoading = true);
     FocusScope.of(context).unfocus();
@@ -55,6 +111,9 @@ class _LoginScreenState extends State<LoginScreen> {
               await prefs.setString('phone', fullPhone);
               await prefs.setString('client_name', data['name'] ?? 'Клиент');
               
+              // 🔥 ПЕРЕХВАТ БАЛЛОВ ПРИ ВХОДЕ 🔥
+              await _capturePendingBonuses(fullPhone);
+
               if (mounted) {
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
               }
@@ -181,6 +240,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.setString('phone', _currentCheckingPhone!);
                         await prefs.setString('client_name', data['name'] ?? 'Клиент');
+                        
+                        // 🔥 ПЕРЕХВАТ БАЛЛОВ ПРИ ЗАВЕРШЕНИИ РЕГИСТРАЦИИ 🔥
+                        await _capturePendingBonuses(_currentCheckingPhone!);
+
                         if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
                       },
                       child: const Text('ДАЛЕЕ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
