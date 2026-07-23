@@ -270,7 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               onTap: () => _showTransferDialog(points),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                margin: const EdgeInsets.right(8),
+                                margin: const EdgeInsets.only(right: 8), // <-- ИСПРАВЛЕНО ЗДЕСЬ
                                 decoration: BoxDecoration(color: Colors.blue[600], borderRadius: BorderRadius.circular(12)),
                                 child: const Row(
                                   children: [
@@ -378,4 +378,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
