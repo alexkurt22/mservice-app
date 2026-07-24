@@ -11,7 +11,7 @@ import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
 import 'screens/services_catalog_screen.dart';
-import 'screens/profile_screen.dart'; // <--- ПОДКЛЮЧИЛИ НОВЫЙ ЧИСТЫЙ ПРОФИЛЬ
+import 'screens/profile_screen.dart'; 
 
 const String CURRENT_APP_VERSION = "1.0.0"; 
 
@@ -145,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }, SetOptions(merge: true));
 
       if (welcomePoints > 0) {
-        await _addBonusHistory(_phone!, welcomePoints, 'Приветственный бонус');
+        await _addBonusHistory(_phone!, welcomePoints, 'Приветственный бонус 🎁');
       }
     }
   }
@@ -167,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _userSubscription?.cancel(); 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red[800]));
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
   }
 
   Future<void> _setupPushNotifications() async {
@@ -180,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await messaging.subscribeToTopic('all_users');
   }
 
+  // --- ИСПРАВЛЕНО: МЕНЮ С ДОБАВЛЕНИЕМ МАГАЗИНА ---
   void _showCreateActionSheet() {
     showModalBottomSheet(
       context: context,
@@ -188,28 +189,44 @@ class _HomeScreenState extends State<HomeScreen> {
         return Container(
           decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              const Text('Что вы хотите сделать?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              ListTile(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.blue[50],
-                leading: CircleAvatar(backgroundColor: Colors.blue[100], child: Icon(Icons.build_circle, color: Colors.blue[700])),
-                title: const Text('Вызвать мастера / Ремонт', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Сразу прямая форма заказа', style: TextStyle(fontSize: 12)),
-                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen())); },
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.purple[50],
-                leading: CircleAvatar(backgroundColor: Colors.purple[100], child: Icon(Icons.layers, color: Colors.purple[700])),
-                title: const Text('Каталог наших услуг', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Витрина услуг перед заказом', style: TextStyle(fontSize: 12)),
-                onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ServicesCatalogScreen())); },
-              ),
-            ],
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+                const Text('Что вы хотите сделать?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 24),
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.blue[50],
+                  leading: CircleAvatar(backgroundColor: Colors.blue[100], child: Icon(Icons.build_circle, color: Colors.blue[700])),
+                  title: const Text('Вызвать мастера / Ремонт', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Сразу прямая форма заказа', style: TextStyle(fontSize: 12)),
+                  onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen())); },
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.purple[50],
+                  leading: CircleAvatar(backgroundColor: Colors.purple[100], child: Icon(Icons.layers, color: Colors.purple[700])),
+                  title: const Text('Каталог наших услуг', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Витрина услуг перед заказом', style: TextStyle(fontSize: 12)),
+                  onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ServicesCatalogScreen())); },
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: Colors.orange[50],
+                  leading: CircleAvatar(backgroundColor: Colors.orange[100], child: Icon(Icons.shopping_bag, color: Colors.orange[700])),
+                  title: const Text('Магазин техники', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Б/У и новые устройства', style: TextStyle(fontSize: 12)),
+                  onTap: () { 
+                    Navigator.pop(context); 
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Магазин находится в разработке! 🚀'), 
+                      backgroundColor: Colors.blueGrey,
+                    )); 
+                  },
+                ),
+              ],
+            ),
           ),
         );
       }
@@ -387,7 +404,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Stack(
       children: [
         ListView(
-          padding: const EdgeInsets.only(bottom: 80),
+          padding: const EdgeInsets.only(bottom: 100), // Увеличенный отступ, чтобы контент не прятался
           children: [
             if (_phone != null)
               StreamBuilder<QuerySnapshot>(
@@ -462,7 +479,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         if (_phone != null)
           Positioned(
-            bottom: 16, right: 16,
+            bottom: 24, // Подняли немного выше, чтобы не конфликтовало с меню
+            right: 16,
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('chat_rooms').where('participants', arrayContains: _phone).snapshots(),
               builder: (context, snapshot) {
@@ -487,13 +505,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     if (_phone == null || _isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         backgroundColor: Colors.white, elevation: 0,
         title: Text(_currentIndex == 0 ? 'M-Service' : 'Профиль', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 24)),
       ),
-      // 🔥 ЗДЕСЬ МЫ ВЫЗЫВАЕМ НАШ НОВЫЙ ЧИСТЫЙ ЭКРАН ПРОФИЛЯ! 🔥
       body: IndexedStack(
         index: _currentIndex, 
         children: [
@@ -501,35 +519,68 @@ class _HomeScreenState extends State<HomeScreen> {
           ProfileScreen(phone: _phone!, maxDiscountPercent: _maxDiscountPercentUI),
         ]
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'create_btn', backgroundColor: Colors.blueGrey[900], elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        onPressed: _showCreateActionSheet, child: const Icon(Icons.add, color: Colors.white, size: 32),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(), notchMargin: 8.0, color: Colors.white, elevation: 20,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              MaterialButton(
-                minWidth: 60, onPressed: () => setState(() => _currentIndex = 0),
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.home_filled, color: _currentIndex == 0 ? Colors.blueGrey[900] : Colors.grey[400]),
-                  Text('Главная', style: TextStyle(fontSize: 10, color: _currentIndex == 0 ? Colors.blueGrey[900] : Colors.grey[400], fontWeight: _currentIndex == 0 ? FontWeight.bold : FontWeight.normal)),
-                ]),
-              ),
-              const SizedBox(width: 48), 
-              MaterialButton(
-                minWidth: 60, onPressed: () => setState(() => _currentIndex = 1),
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.person, color: _currentIndex == 1 ? Colors.blueGrey[900] : Colors.grey[400]),
-                  Text('Профиль', style: TextStyle(fontSize: 10, color: _currentIndex == 1 ? Colors.blueGrey[900] : Colors.grey[400], fontWeight: _currentIndex == 1 ? FontWeight.bold : FontWeight.normal)),
-                ]),
-              ),
-            ],
+      
+      // --- ИСПРАВЛЕНО: НОВОЕ ПЛОСКОЕ МЕНЮ (БЕЗ ПИРАМИДЫ) С SAFEAREA ---
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -2))]
+        ),
+        child: SafeArea( // Защита от системных кнопок и полоски свайпа
+          child: SizedBox(
+            height: 60,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Кнопка ГЛАВНАЯ
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _currentIndex = 0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.home_filled, color: _currentIndex == 0 ? Colors.blueGrey[900] : Colors.grey[400]),
+                        Text('Главная', style: TextStyle(fontSize: 10, color: _currentIndex == 0 ? Colors.blueGrey[900] : Colors.grey[400], fontWeight: _currentIndex == 0 ? FontWeight.bold : FontWeight.normal)),
+                      ]
+                    ),
+                  ),
+                ),
+                
+                // Центральная кнопка ПЛЮС (Вровень с меню)
+                Expanded(
+                  child: Center(
+                    child: InkWell(
+                      onTap: _showCreateActionSheet,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.blueGrey[900],
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [BoxShadow(color: Colors.blueGrey.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                        ),
+                        child: const Icon(Icons.add, color: Colors.white, size: 28),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Кнопка ПРОФИЛЬ
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _currentIndex = 1),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.person, color: _currentIndex == 1 ? Colors.blueGrey[900] : Colors.grey[400]),
+                        Text('Профиль', style: TextStyle(fontSize: 10, color: _currentIndex == 1 ? Colors.blueGrey[900] : Colors.grey[400], fontWeight: _currentIndex == 1 ? FontWeight.bold : FontWeight.normal)),
+                      ]
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
