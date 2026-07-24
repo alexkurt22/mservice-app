@@ -155,8 +155,8 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
 
-        // 🔥 ШАГ 1: ТОЧНЫЙ ЗАПРОС ПРИВЕТСТВЕННОГО БОНУСА ИЗ БАЗЫ 🔥
-        int welcomeBonus = 10; // Дефолтное значение, если база недоступна
+        // Запрашиваем приветственный бонус
+        int welcomeBonus = 10; 
         try {
           final loyaltyDoc = await FirebaseFirestore.instance
               .collection('settings')
@@ -175,7 +175,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final String generatedCode = (Random().nextInt(9000) + 1000).toString();
 
-        await FirebaseFirestore.instance.collection('clients').doc(fullPhone).set({
+        // 🔥 СОХРАНЯЕМ И ПРОФИЛЬ, И ИСТОРИЮ БОНУСОВ 🔥
+        final db = FirebaseFirestore.instance;
+        final batch = db.batch();
+        final newClientRef = db.collection('clients').doc(fullPhone);
+
+        batch.set(newClientRef, {
           'name': name,
           'phone': fullPhone,
           'password': password,
@@ -183,8 +188,19 @@ class _LoginScreenState extends State<LoginScreen> {
           'is_approved': false,
           'sms_code': generatedCode,
           'rejection_reason': null,
-          'bonus_points': welcomeBonus, // <-- ПРАВИЛЬНЫЙ БОНУС ИЗ АДМИНКИ
+          'bonus_points': welcomeBonus, 
         });
+
+        if (welcomeBonus > 0) {
+          final historyRef = newClientRef.collection('bonus_history').doc();
+          batch.set(historyRef, {
+            'amount': welcomeBonus,
+            'description': 'Бонус за регистрацию 🎁',
+            'created_at': FieldValue.serverTimestamp(),
+          });
+        }
+
+        await batch.commit();
 
         setState(() {
           _currentCheckingPhone = fullPhone;
@@ -221,6 +237,72 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // --- ЛОГИКА ОКНА "ЗАБЫЛИ ПАРОЛЬ" ---
+  void _showForgotPasswordDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Восстановление пароля', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Свяжитесь с администратором удобным для вас способом, чтобы сбросить пароль.'),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.phone, color: Colors.green, size: 32),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final url = Uri.parse('tel:+99363644925');
+              if (await canLaunchUrl(url)) await launchUrl(url);
+            }
+          ),
+          IconButton(
+            icon: const Icon(Icons.sms, color: Colors.blue, size: 32),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final url = Uri.parse('sms:+99363644925?body=Здравствуйте, я забыл пароль от аккаунта M-Service. Помогите восстановить.');
+              if (await canLaunchUrl(url)) await launchUrl(url);
+            }
+          ),
+          IconButton(
+            icon: const Icon(Icons.chat, color: Colors.orange, size: 32),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openGuestChat();
+            }
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- ЛОГИКА ГОСТЕВОГО ЧАТА ---
+  void _openGuestChat() {
+    final rawPhone = _phoneController.text.trim().replaceAll(' ', '');
+    if (rawPhone.length < 8 && _currentCheckingPhone == null) {
+       _showError('Пожалуйста, введите ваш номер телефона (8 цифр) в поле логина, чтобы мы знали, кому отвечать в чате');
+       return;
+    }
+    
+    final chatPhone = _currentCheckingPhone ?? '+993$rawPhone';
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))
+          ),
+          child: GuestChatWidget(phone: chatPhone),
+        ),
+      ),
+    );
+  }
+
   Widget _buildVerificationScreen() {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('clients').doc(_currentCheckingPhone).snapshots(),
@@ -233,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final bool isApproved = data['is_approved'] ?? false;
         final String? rejectionReason = data['rejection_reason'];
         final String smsCode = data['sms_code'] ?? '';
-        final int userPoints = data['bonus_points'] ?? 0; // Получаем баланс для уведомления
+        final int userPoints = data['bonus_points'] ?? 0;
 
         return SafeArea(
           child: Center(
@@ -260,14 +342,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         await _capturePendingBonuses(_currentCheckingPhone!);
 
                         if (mounted) {
-                          // 🔥 ШАГ 2: УВЕДОМЛЕНИЕ ПРИ УСПЕШНОМ ВХОДЕ 🔥
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                             content: Text('Вам начислено $userPoints приветственных баллов 🎁'),
                             backgroundColor: Colors.green[700],
                             behavior: SnackBarBehavior.floating,
                             duration: const Duration(seconds: 4),
                           ));
-
                           Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
                         }
                       },
@@ -332,11 +412,26 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     if (_currentCheckingPhone != null) {
-      return Scaffold(backgroundColor: Colors.white, body: _buildVerificationScreen());
+      return Scaffold(
+        backgroundColor: Colors.white, 
+        body: _buildVerificationScreen(),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _openGuestChat,
+          backgroundColor: Colors.orange,
+          icon: const Icon(Icons.support_agent, color: Colors.white),
+          label: const Text('Помощь', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+      );
     }
 
     return Scaffold(
       backgroundColor: Colors.white,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openGuestChat,
+        backgroundColor: Colors.orange,
+        icon: const Icon(Icons.support_agent, color: Colors.white),
+        label: const Text('Помощь', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -379,10 +474,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () async {
-                        final url = Uri.parse('tel:+99363644925');
-                        if (await canLaunchUrl(url)) await launchUrl(url);
-                      },
+                      onPressed: _showForgotPasswordDialog,
                       child: Text('Забыли пароль?', style: TextStyle(color: Colors.blueGrey[700])),
                     ),
                   ),
@@ -419,6 +511,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.blueGrey[600], fontSize: 15),
                   ),
                 ),
+                const SizedBox(height: 40), // Отступ для плавающей кнопки
               ],
             ),
           ),
@@ -452,3 +545,165 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+// --- ВИДЖЕТ ВРЕМЕННОГО ЧАТА ДЛЯ НЕЗАРЕГИСТРИРОВАННЫХ ПОЛЬЗОВАТЕЛЕЙ ---
+class GuestChatWidget extends StatefulWidget {
+  final String phone;
+  const GuestChatWidget({super.key, required this.phone});
+
+  @override
+  _GuestChatWidgetState createState() => _GuestChatWidgetState();
+}
+
+class _GuestChatWidgetState extends State<GuestChatWidget> {
+  final _msgController = TextEditingController();
+
+  void _sendMessage() async {
+    if (_msgController.text.trim().isEmpty) return;
+    
+    final text = _msgController.text.trim();
+    _msgController.clear();
+    FocusScope.of(context).unfocus();
+
+    final db = FirebaseFirestore.instance;
+    final chatId = 'guest_${widget.phone}';
+    final chatRef = db.collection('support_chats').doc(chatId);
+
+    // Обновляем сам документ чата
+    await chatRef.set({
+      'phone': widget.phone,
+      'is_guest': true,
+      'last_message': text,
+      'updated_at': FieldValue.serverTimestamp(),
+      'has_unread_admin': true,
+    }, SetOptions(merge: true));
+
+    // Добавляем сообщение
+    await chatRef.collection('messages').add({
+      'text': text,
+      'sender_id': widget.phone,
+      'is_admin': false,
+      'created_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chatId = 'guest_${widget.phone}';
+
+    return Column(
+      children: [
+        // Шапка чата
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.blueGrey[900],
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20))
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.support_agent, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('Чат с поддержкой', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white70),
+                onPressed: () => Navigator.pop(context),
+              )
+            ],
+          ),
+        ),
+        
+        // Список сообщений
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('support_chats')
+                .doc(chatId)
+                .collection('messages')
+                .orderBy('created_at', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              final docs = snapshot.data!.docs;
+              
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: Text('Опишите вашу проблему, и администратор ответит вам в ближайшее время.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                reverse: true,
+                padding: const EdgeInsets.all(16),
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final msg = docs[index].data() as Map<String, dynamic>;
+                  final isAdmin = msg['is_admin'] ?? false;
+                  
+                  return Align(
+                    alignment: isAdmin ? Alignment.centerLeft : Alignment.centerRight,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isAdmin ? Colors.grey[200] : Colors.blueGrey[800],
+                        borderRadius: BorderRadius.circular(12).copyWith(
+                          bottomRight: isAdmin ? const Radius.circular(12) : Radius.zero,
+                          bottomLeft: isAdmin ? Radius.zero : const Radius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        msg['text'] ?? '',
+                        style: TextStyle(color: isAdmin ? Colors.black87 : Colors.white),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+
+        // Поле ввода
+        Container(
+          padding: const EdgeInsets.all(8.0),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _msgController,
+                  decoration: InputDecoration(
+                    hintText: 'Введите сообщение...',
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              CircleAvatar(
+                backgroundColor: Colors.orange,
+                child: IconButton(
+                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                  onPressed: _sendMessage,
+                ),
+              )
+            ],
+          ),
+        )
+      ],
+    );
+  }
+}
