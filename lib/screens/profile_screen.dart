@@ -23,13 +23,47 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   
+  // --- ОБНОВЛЕННАЯ ЛОГИКА ВЫХОДА С ПОДТВЕРЖДЕНИЕМ ---
   Future<void> _logout() async {
+    // 1. Показываем диалог подтверждения
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.logout, color: Colors.redAccent),
+              SizedBox(width: 8),
+              Text('Выход', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text('Вы точно хотите выйти из своего аккаунта?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false), // Отмена
+              child: const Text('Отмена', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              onPressed: () => Navigator.of(context).pop(true), // Подтверждение
+              child: const Text('Выйти', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+
+    // 2. Если пользователь нажал "Отмена" или просто закрыл окно - прерываем функцию
+    if (confirm != true) return;
+
+    // 3. Если подтвердил - выполняем выход
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false,
     );
   }
@@ -270,7 +304,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               onTap: () => _showTransferDialog(points),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                margin: const EdgeInsets.only(right: 8), // <-- ИСПРАВЛЕНО ЗДЕСЬ
+                                margin: const EdgeInsets.only(right: 8), 
                                 decoration: BoxDecoration(color: Colors.blue[600], borderRadius: BorderRadius.circular(12)),
                                 child: const Row(
                                   children: [
@@ -361,7 +395,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               _buildMenuCard(title: 'Служба поддержки', subtitle: 'Связь с администратором', icon: Icons.headset_mic, iconColor: Colors.teal[700]!, onTap: _callAdmin),
               
-              // КНОПКА ВЫХОДА (Перенесена сюда для удобства)
+              // КНОПКА ВЫХОДА
               const SizedBox(height: 32),
               Center(
                 child: TextButton.icon(
