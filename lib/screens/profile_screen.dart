@@ -5,7 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'my_orders_screen.dart';
 import 'bonus_history_screen.dart';
-import '../login_screen.dart'; // Путь к экрану логина
+import '../login_screen.dart'; 
+import '../main.dart'; // Подключаем main.dart для доступа к themeNotifier
 
 class ProfileScreen extends StatefulWidget {
   final String phone;
@@ -25,10 +26,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   
   // --- ЛОГИКА ВЫХОДА С ПОДТВЕРЖДЕНИЕМ ---
   Future<void> _logout() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
+          backgroundColor: Theme.of(context).cardColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
@@ -37,7 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text('Выход', style: TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
-          content: const Text('Вы точно хотите выйти из своего аккаунта?'),
+          content: Text('Вы точно хотите выйти из своего аккаунта?', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -72,6 +76,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // --- ЛОГИКА ПЕРЕВОДА БОНУСОВ ---
   void _showTransferDialog(int currentBalance) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final phoneController = TextEditingController(text: '+993');
     final amountController = TextEditingController();
     bool isTransferring = false;
@@ -82,30 +87,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
+            backgroundColor: Theme.of(context).cardColor,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('Поделиться бонусами', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            title: Text('Поделиться бонусами', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Бонусы будут зачислены другу. Если у него нет приложения, они будут "в ожидании" до регистрации.', style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                Text('Бонусы будут зачислены другу. Если у него нет приложения, они будут "в ожидании" до регистрации.', style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.blueGrey)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                   decoration: InputDecoration(
                     labelText: 'Номер телефона (+993...)',
-                    filled: true, fillColor: Colors.grey[100],
+                    labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[700]),
+                    filled: true, fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    prefixIcon: const Icon(Icons.phone),
+                    prefixIcon: Icon(Icons.phone, color: isDark ? Colors.white54 : Colors.grey[600]),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: amountController,
                   keyboardType: TextInputType.number,
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                   decoration: InputDecoration(
                     labelText: 'Количество бонусов',
-                    filled: true, fillColor: Colors.grey[100],
+                    labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[700]),
+                    filled: true, fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     prefixIcon: const Icon(Icons.stars_rounded, color: Colors.orange),
                   ),
@@ -227,6 +237,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // --- ОКНО ВВОДА ДАННЫХ ПРОФИЛЯ ---
   Future<void> _showProfileForm() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     String? selectedGender;
     DateTime? selectedDate;
 
@@ -236,17 +247,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
+            backgroundColor: Theme.of(context).cardColor,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('Личные данные', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: Text('Личные данные', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Укажите данные для получения подарков на День Рождения. Внимание: изменить их позже нельзя!', style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                Text('Укажите данные для получения подарков на День Рождения. Внимание: изменить их позже нельзя!', style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.blueGrey)),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
+                  dropdownColor: Theme.of(context).cardColor,
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                   decoration: InputDecoration(
                     labelText: 'Ваш пол', 
+                    labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[700]),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[400]!)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
                   ),
                   value: selectedGender,
@@ -270,14 +286,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
+                      border: Border.all(color: isDark ? Colors.grey[700]! : Colors.grey.shade400),
                       borderRadius: BorderRadius.circular(12)
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(selectedDate == null ? 'Дата рождения' : '${selectedDate!.day.toString().padLeft(2,'0')}.${selectedDate!.month.toString().padLeft(2,'0')}.${selectedDate!.year}', style: TextStyle(fontSize: 16, color: selectedDate == null ? Colors.grey[600] : Colors.black87)),
-                        const Icon(Icons.calendar_today, color: Colors.blueGrey),
+                        Text(selectedDate == null ? 'Дата рождения' : '${selectedDate!.day.toString().padLeft(2,'0')}.${selectedDate!.month.toString().padLeft(2,'0')}.${selectedDate!.year}', style: TextStyle(fontSize: 16, color: selectedDate == null ? (isDark ? Colors.white54 : Colors.grey[600]) : (isDark ? Colors.white : Colors.black87))),
+                        Icon(Icons.calendar_today, color: isDark ? Colors.white54 : Colors.blueGrey),
                       ],
                     ),
                   ),
@@ -307,18 +323,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // --- ОКНО ПРАВИЛ И ЦЕН ---
   void _showRulesDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.gavel, color: Colors.blueGrey),
-            SizedBox(width: 8),
-            Expanded(child: Text('Правила сервиса', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+            Icon(Icons.gavel, color: isDark ? Colors.white70 : Colors.blueGrey),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Правила сервиса', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87))),
           ],
         ),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Text(
             '1. Бонусная система\n'
             '1 бонус = 1 манат. Бонусами можно оплатить до 30% от стоимости услуг. Бонусы нельзя обменять на наличные.\n\n'
@@ -326,13 +344,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Диагностика проводится бесплатно при согласии на ремонт. Сроки ремонта зависят от сложности и наличия деталей.\n\n'
             '3. Гарантия\n'
             'Мы предоставляем гарантию на выполненные работы и установленные запчасти. Точный срок гарантии указывается в квитанции.',
-            style: TextStyle(fontSize: 14, height: 1.5, color: Colors.black87),
+            style: TextStyle(fontSize: 14, height: 1.5, color: isDark ? Colors.white70 : Colors.black87),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Понятно', style: TextStyle(color: Colors.blue)),
+            child: Text('Понятно', style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue)),
           ),
         ],
       ),
@@ -340,26 +358,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // --- ВИДЖЕТ PUNCH-КАРТЫ ---
-  Widget _buildPunchCard(int refills) {
+  Widget _buildPunchCard(int refills, bool isDark) {
     int progress = refills % 5;
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.print, color: Colors.blueGrey),
-                SizedBox(width: 8),
-                Text('Заправка картриджей', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Icon(Icons.print, color: isDark ? Colors.white70 : Colors.blueGrey),
+                const SizedBox(width: 8),
+                Text('Заправка картриджей', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
               ],
             ),
             const SizedBox(height: 8),
-            const Text('Каждая 5-я заправка — БЕСПЛАТНО!', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            Text('Каждая 5-я заправка — БЕСПЛАТНО!', style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.grey)),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -370,7 +387,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: isFilled ? Colors.orange : Colors.grey[100],
+                    color: isFilled ? Colors.orange : (isDark ? Colors.grey[800] : Colors.grey[100]),
                     shape: BoxShape.circle,
                     border: isLast ? Border.all(color: Colors.orange, width: 2) : null,
                   ),
@@ -383,14 +400,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               }),
             ),
             const SizedBox(height: 12),
-            Text('Заправлено: $refills шт.', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            Text('Заправлено: $refills шт.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
+  Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color iconColor, required VoidCallback onTap, required bool isDark}) {
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -401,9 +418,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.symmetric(vertical: 16.0),
           child: ListTile(
             leading: CircleAvatar(backgroundColor: iconColor.withOpacity(0.1), child: Icon(icon, color: iconColor)),
-            title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-            subtitle: Text(subtitle, style: TextStyle(color: Colors.blueGrey[400], fontSize: 13)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            title: Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+            subtitle: Text(subtitle, style: TextStyle(color: isDark ? Colors.white54 : Colors.blueGrey[400], fontSize: 13)),
+            trailing: Icon(Icons.arrow_forward_ios, size: 16, color: isDark ? Colors.white24 : Colors.grey),
           ),
         ),
       ),
@@ -412,6 +429,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Получаем текущую тему, чтобы правильно раскрасить элементы
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('clients').doc(widget.phone).snapshots(),
       builder: (context, snapshot) {
@@ -423,7 +443,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           points = data['bonus_points'] as int? ?? 0;
-          cartridgeRefills = data['cartridge_refills'] as int? ?? 0; // Для Punch-карты
+          cartridgeRefills = data['cartridge_refills'] as int? ?? 0;
           gender = data['gender'] as String?;
           birthDate = data['birth_date'] as String?;
         }
@@ -500,7 +520,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
 
               // PUNCH-КАРТА (ГЕЙМИФИКАЦИЯ)
-              _buildPunchCard(cartridgeRefills),
+              _buildPunchCard(cartridgeRefills, isDark),
               const SizedBox(height: 16),
 
               // БЛОК ОЖИДАЮЩИХ ПЕРЕВОДОВ (Замороженные бонусы)
@@ -522,7 +542,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: Colors.orange[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange[200]!)),
+                          decoration: BoxDecoration(color: isDark ? Colors.orange[900]?.withOpacity(0.2) : Colors.orange[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange[200]!)),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -530,7 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 children: [
                                   const Icon(Icons.access_time_filled, color: Colors.orange, size: 18),
                                   const SizedBox(width: 8),
-                                  Text('Для ${data['recipient_phone']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text('Для ${data['recipient_phone']}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
                                 ],
                               ),
                               Text('${data['amount']} бонусов', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 14)),
@@ -544,20 +564,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
               ),
 
-              const Text('ЛИЧНЫЕ ДАННЫЕ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+              Text('ЛИЧНЫЕ ДАННЫЕ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
               const SizedBox(height: 12),
               
               // РАСШИРЕННЫЙ ПРОФИЛЬ
               if (gender == null || birthDate == null)
                 Card(
-                  color: Colors.orange[50],
+                  color: isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[50],
                   elevation: 0,
-                  // ИСПРАВЛЕНИЕ: Используем side: BorderSide вместо border: Border.all
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.orange[200]!)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange[200]!)),
                   child: ListTile(
                     leading: const Icon(Icons.person_add_alt_1, color: Colors.orange),
-                    title: const Text('Заполнить профиль', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                    subtitle: const Text('Укажите ДР для получения подарков', style: TextStyle(fontSize: 12)),
+                    title: Text('Заполнить профиль', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                    subtitle: Text('Укажите ДР для получения подарков', style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.black54)),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.orange),
                     onTap: _showProfileForm,
                   ),
@@ -572,21 +591,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.person, color: Colors.blueGrey, size: 20),
+                            Icon(Icons.person, color: isDark ? Colors.white70 : Colors.blueGrey, size: 20),
                             const SizedBox(width: 12),
-                            Text('Пол: $gender', style: const TextStyle(fontSize: 15)),
+                            Text('Пол: $gender', style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
                             const Spacer(),
-                            const Icon(Icons.lock, size: 16, color: Colors.grey), // Замочек (защита от смены)
+                            const Icon(Icons.lock, size: 16, color: Colors.grey), 
                           ],
                         ),
-                        const Divider(height: 24),
+                        Divider(height: 24, color: isDark ? Colors.grey[800] : Colors.grey[200]),
                         Row(
                           children: [
-                            const Icon(Icons.cake, color: Colors.blueGrey, size: 20),
+                            Icon(Icons.cake, color: isDark ? Colors.white70 : Colors.blueGrey, size: 20),
                             const SizedBox(width: 12),
-                            Text('Дата рождения: $birthDate', style: const TextStyle(fontSize: 15)),
+                            Text('Дата рождения: $birthDate', style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
                             const Spacer(),
-                            const Icon(Icons.lock, size: 16, color: Colors.grey), // Замочек
+                            const Icon(Icons.lock, size: 16, color: Colors.grey), 
                           ],
                         ),
                       ],
@@ -595,8 +614,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               const SizedBox(height: 24),
 
-              const Text('МОЙ АККАУНТ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+              Text('МОЙ АККАУНТ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
               const SizedBox(height: 12),
+
+              // 🔥 ПЕРЕКЛЮЧАТЕЛЬ ТЁМНОЙ ТЕМЫ 🔥
+              Card(
+                elevation: 1,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: SwitchListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  title: Text('Тёмная тема', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+                  subtitle: Text('Внешний вид приложения', style: TextStyle(color: isDark ? Colors.white54 : Colors.blueGrey[400], fontSize: 13)),
+                  secondary: CircleAvatar(
+                    backgroundColor: isDark ? Colors.blueGrey.withOpacity(0.2) : Colors.orange.withOpacity(0.1),
+                    child: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: isDark ? Colors.blue[300] : Colors.orange),
+                  ),
+                  value: isDark,
+                  activeColor: Colors.blue[300],
+                  onChanged: (val) async {
+                    // Переключаем глобальную тему и сохраняем настройку
+                    themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('is_dark_theme', val);
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
               
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: widget.phone).where('has_unread_update', isEqualTo: true).snapshots(),
@@ -604,16 +647,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   int unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
                   return Badge(
                     isLabelVisible: unreadCount > 0, label: Text(unreadCount.toString()), offset: const Offset(-4, -4),
-                    child: _buildMenuCard(title: 'Мои заказы', subtitle: 'История ремонтов и статусы', icon: Icons.list_alt, iconColor: Colors.blueGrey[700]!, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()))),
+                    child: _buildMenuCard(title: 'Мои заказы', subtitle: 'История ремонтов и статусы', icon: Icons.list_alt, iconColor: Colors.blueGrey[700]!, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen())), isDark: isDark),
                   );
                 },
               ),
               const SizedBox(height: 8),
-              _buildMenuCard(title: 'Служба поддержки', subtitle: 'Связь с администратором', icon: Icons.headset_mic, iconColor: Colors.teal[700]!, onTap: _callAdmin),
+              _buildMenuCard(title: 'Служба поддержки', subtitle: 'Связь с администратором', icon: Icons.headset_mic, iconColor: Colors.teal[700]!, onTap: _callAdmin, isDark: isDark),
               const SizedBox(height: 8),
               
               // КНОПКА ПРАВИЛ И ЦЕН
-              _buildMenuCard(title: 'Актуальность цен и правила', subtitle: 'Условия работы и гарантии', icon: Icons.gavel, iconColor: Colors.purple[700]!, onTap: _showRulesDialog),
+              _buildMenuCard(title: 'Актуальность цен и правила', subtitle: 'Условия работы и гарантии', icon: Icons.gavel, iconColor: Colors.purple[700]!, onTap: _showRulesDialog, isDark: isDark),
               
               const SizedBox(height: 32),
               Center(
@@ -631,3 +674,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+
