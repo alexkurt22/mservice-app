@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? _currentCheckingPhone;
 
-  // --- ЛОГИКА ЗАХВАТА ОЖИДАЮЩИХ БАЛЛОВ ---
+  // --- ЛОГИКА ЗАХВАТА ОЖИДАЮЩИХ БОНУСОВ ---
   Future<void> _capturePendingBonuses(String phone) async {
     try {
       final db = FirebaseFirestore.instance;
@@ -65,13 +65,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (mounted && totalBonus > 0) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Вам зачислено $totalBonus подарочных баллов от друзей! 🎉'),
+          content: Text('Вам зачислено $totalBonus подарочных бонусов от друзей! 🎉'),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 5),
         ));
       }
     } catch (e) {
-      debugPrint('Ошибка при начислении ожидающих баллов: $e');
+      debugPrint('Ошибка при начислении ожидающих бонусов: $e');
     }
   }
 
@@ -235,14 +235,16 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- ИСПРАВЛЕНО: ОКНО "ЗАБЫЛИ ПАРОЛЬ" С ПОДПИСЯМИ ---
+  // --- ОКНО "ЗАБЫЛИ ПАРОЛЬ" С ПОДПИСЯМИ ---
   void _showForgotPasswordDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Восстановление пароля', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Свяжитесь с администратором удобным для вас способом:'),
+        title: Text('Восстановление пароля', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+        content: Text('Свяжитесь с администратором удобным для вас способом:', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
         contentPadding: const EdgeInsets.only(top: 16, left: 24, right: 24),
         actionsPadding: const EdgeInsets.all(16),
         actions: [
@@ -251,7 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.phone, color: Colors.green),
-                title: const Text('Позвонить'),
+                title: Text('Позвонить', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final url = Uri.parse('tel:+99363644925');
@@ -260,7 +262,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.sms, color: Colors.blue),
-                title: const Text('Написать SMS'),
+                title: Text('Написать SMS', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final url = Uri.parse('sms:+99363644925?body=Здравствуйте, я забыл пароль от аккаунта M-Service. Помогите восстановить.');
@@ -269,7 +271,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.chat, color: Colors.orange),
-                title: const Text('Чат с поддержкой'),
+                title: Text('Чат с поддержкой', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _openGuestChat();
@@ -287,14 +289,14 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- ИСПРАВЛЕНО: ЛОГИКА ГОСТЕВОГО ЧАТА (ВРЕМЯ УВЕДОМЛЕНИЯ И ЦВЕТ) ---
+  // --- ЛОГИКА ГОСТЕВОГО ЧАТА ---
   void _openGuestChat() {
     final rawPhone = _phoneController.text.trim().replaceAll(' ', '');
     if (rawPhone.length < 8 && _currentCheckingPhone == null) {
        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
          content: Text('Укажите ваш номер в поле логина (8 цифр), чтобы мы знали, кому отвечать в чате 🤝', style: TextStyle(fontSize: 15)),
          backgroundColor: Colors.blueGrey,
-         duration: Duration(seconds: 6), // Висит 6 секунд
+         duration: Duration(seconds: 6), 
        ));
        return;
     }
@@ -309,9 +311,9 @@ class _LoginScreenState extends State<LoginScreen> {
         padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Container(
           height: MediaQuery.of(context).size.height * 0.75,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20))
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20))
           ),
           child: GuestChatWidget(phone: chatPhone),
         ),
@@ -319,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildVerificationScreen() {
+  Widget _buildVerificationScreen(bool isDark) {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('clients').doc(_currentCheckingPhone).snapshots(),
       builder: (context, snapshot) {
@@ -344,7 +346,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (isApproved) ...[
                     const Icon(Icons.check_circle, size: 80, color: Colors.green),
                     const SizedBox(height: 24),
-                    const Text('Спасибо за регистрацию!', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text('Спасибо за регистрацию!', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                     const SizedBox(height: 16),
                     const Text('Ваш аккаунт успешно подтвержден.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.grey)),
                     const SizedBox(height: 32),
@@ -359,7 +361,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Вам начислено $userPoints приветственных баллов 🎁'),
+                            content: Text('Вам начислено $userPoints приветственных бонусов 🎁'),
                             backgroundColor: Colors.green[700],
                             behavior: SnackBarBehavior.floating,
                             duration: const Duration(seconds: 4),
@@ -375,10 +377,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
                     const Text('Регистрация отклонена', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
                     const SizedBox(height: 16),
-                    Text('Введены неверные данные.\nПричина: $rejectionReason', textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+                    Text('Введены неверные данные.\nПричина: $rejectionReason', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black87)),
                     const SizedBox(height: 32),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
+                      style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
                       onPressed: () => setState(() => _currentCheckingPhone = null),
                       child: const Text('ИЗМЕНИТЬ НОМЕР ТЕЛЕФОНА', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
@@ -386,22 +388,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   else ...[
                     const Icon(Icons.mark_email_unread, size: 80, color: Colors.orange),
                     const SizedBox(height: 24),
-                    const Text('Подтверждение номера', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text('Подтверждение номера', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                     const SizedBox(height: 16),
                     RichText(
                       textAlign: TextAlign.center,
                       text: TextSpan(
-                        style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.5),
+                        style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black87, height: 1.5),
                         children: [
                           const TextSpan(text: 'Для завершения регистрации отправьте SMS с кодом '),
-                          TextSpan(text: smsCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.blueGrey)),
+                          TextSpan(text: smsCode, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: isDark ? Colors.blue[300] : Colors.blueGrey)),
                           const TextSpan(text: ' на номер администратора.'),
                         ],
                       ),
                     ),
                     const SizedBox(height: 32),
                     ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
+                      style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
                       onPressed: () => _sendSms(smsCode),
                       icon: const Icon(Icons.sms, color: Colors.white),
                       label: const Text('ОТПРАВИТЬ SMS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -427,10 +429,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (_currentCheckingPhone != null) {
       return Scaffold(
-        backgroundColor: Colors.white, 
-        body: _buildVerificationScreen(),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor, 
+        body: _buildVerificationScreen(isDark),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _openGuestChat,
           backgroundColor: Colors.orange,
@@ -441,7 +445,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openGuestChat,
         backgroundColor: Colors.orange,
@@ -456,11 +460,11 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(Icons.business_center, size: 48, color: Colors.blueGrey[900]),
+                Icon(Icons.business_center, size: 48, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[900]),
                 const SizedBox(height: 16),
                 Text(
                   'M-SERVICE',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.blueGrey[900], letterSpacing: 1.5),
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.blueGrey[900], letterSpacing: 1.5),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
@@ -472,18 +476,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 48),
 
                 if (!_isLogin) ...[
-                  _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.name),
+                  _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.name, isDark: isDark),
                   const SizedBox(height: 16),
                 ],
 
-                _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 ', maxLength: 8),
+                _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 ', maxLength: 8, isDark: isDark),
                 const SizedBox(height: 16),
 
-                _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов'),
+                _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов', isDark: isDark),
                 const SizedBox(height: 16),
 
                 if (!_isLogin) ...[
-                  _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true),
+                  _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true, isDark: isDark),
                 ],
 
                 if (_isLogin)
@@ -491,7 +495,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: _showForgotPasswordDialog,
-                      child: Text('Забыли пароль?', style: TextStyle(color: Colors.blueGrey[700])),
+                      child: Text('Забыли пароль?', style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blueGrey[700])),
                     ),
                   ),
 
@@ -499,7 +503,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueGrey[900],
+                    backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900],
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -524,7 +528,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   child: Text(
                     _isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти',
-                    style: TextStyle(color: Colors.blueGrey[600], fontSize: 15),
+                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.blueGrey[600], fontSize: 15),
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -536,28 +540,30 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- ИСПРАВЛЕНО: ПРИНУДИТЕЛЬНАЯ ТЕКСТОВАЯ КЛАВИАТУРА ДЛЯ ИМЕНИ ---
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText, int? maxLength}) {
+  // --- АДАПТИРОВАННОЕ ТЕКСТОВОЕ ПОЛЕ ---
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText, int? maxLength, required bool isDark}) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
       maxLength: maxLength,
-      textCapitalization: keyboardType == TextInputType.name ? TextCapitalization.words : TextCapitalization.none, // Заставляет открывать буквенную клавиатуру
+      textCapitalization: keyboardType == TextInputType.name ? TextCapitalization.words : TextCapitalization.none,
       inputFormatters: keyboardType == TextInputType.phone ? [FilteringTextInputFormatter.digitsOnly] : null,
-      style: const TextStyle(fontSize: 16),
+      style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[700]),
         hintText: hintText,
+        hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey[400]),
         prefixText: prefixText,
         counterText: '',
-        prefixStyle: const TextStyle(fontSize: 16, color: Colors.black87),
-        prefixIcon: Icon(icon, color: Colors.blueGrey[400]),
+        prefixStyle: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
+        prefixIcon: Icon(icon, color: isDark ? Colors.white54 : Colors.blueGrey[400]),
         filled: true,
-        fillColor: Colors.grey[100],
+        fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.blueGrey)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? Colors.blueGrey[300]! : Colors.blueGrey)),
       ),
     );
   }
@@ -605,13 +611,14 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
   @override
   Widget build(BuildContext context) {
     final chatId = 'guest_${widget.phone}';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.blueGrey[900],
+            color: isDark ? Colors.grey[900] : Colors.blueGrey[900],
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20))
           ),
           child: Row(
@@ -645,10 +652,10 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
               final docs = snapshot.data!.docs;
               
               if (docs.isEmpty) {
-                return const Center(
+                return Center(
                   child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Text('Опишите вашу проблему, и администратор ответит вам в ближайшее время.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                    padding: const EdgeInsets.all(32.0),
+                    child: Text('Опишите вашу проблему, и администратор ответит вам в ближайшее время.', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white54 : Colors.grey)),
                   ),
                 );
               }
@@ -667,7 +674,7 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isAdmin ? Colors.grey[200] : Colors.blueGrey[800],
+                        color: isAdmin ? (isDark ? Colors.grey[800] : Colors.grey[200]) : (isDark ? Colors.blueGrey[700] : Colors.blueGrey[800]),
                         borderRadius: BorderRadius.circular(12).copyWith(
                           bottomRight: isAdmin ? const Radius.circular(12) : Radius.zero,
                           bottomLeft: isAdmin ? Radius.zero : const Radius.circular(12),
@@ -675,7 +682,7 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
                       ),
                       child: Text(
                         msg['text'] ?? '',
-                        style: TextStyle(color: isAdmin ? Colors.black87 : Colors.white),
+                        style: TextStyle(color: isAdmin ? (isDark ? Colors.white : Colors.black87) : Colors.white),
                       ),
                     ),
                   );
@@ -685,24 +692,25 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
           ),
         ),
 
-        // --- ИСПРАВЛЕНО: ЗАЩИТА ПОЛЯ ВВОДА ОТ СИСТЕМНЫХ КНОПОК ---
         SafeArea(
           bottom: true,
           child: Container(
             padding: const EdgeInsets.all(8.0),
             decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
+              color: Theme.of(context).cardColor,
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.05), blurRadius: 10, offset: const Offset(0, -5))],
             ),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _msgController,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                     decoration: InputDecoration(
                       hintText: 'Введите сообщение...',
+                      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[500]),
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
@@ -710,7 +718,7 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: Colors.orange,
+                  backgroundColor: isDark ? Colors.blueGrey[700] : Colors.orange,
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white, size: 20),
                     onPressed: _sendMessage,
