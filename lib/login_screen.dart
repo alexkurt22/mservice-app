@@ -111,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
               await _capturePendingBonuses(fullPhone);
 
               if (mounted) {
-                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
               }
             } else {
               setState(() {
@@ -155,7 +155,6 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
 
-        // Запрашиваем приветственный бонус
         int welcomeBonus = 10; 
         try {
           final loyaltyDoc = await FirebaseFirestore.instance
@@ -175,7 +174,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final String generatedCode = (Random().nextInt(9000) + 1000).toString();
 
-        // 🔥 СОХРАНЯЕМ И ПРОФИЛЬ, И ИСТОРИЮ БОНУСОВ 🔥
         final db = FirebaseFirestore.instance;
         final batch = db.batch();
         final newClientRef = db.collection('clients').doc(fullPhone);
@@ -237,49 +235,67 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- ЛОГИКА ОКНА "ЗАБЫЛИ ПАРОЛЬ" ---
+  // --- ИСПРАВЛЕНО: ОКНО "ЗАБЫЛИ ПАРОЛЬ" С ПОДПИСЯМИ ---
   void _showForgotPasswordDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Восстановление пароля', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Свяжитесь с администратором удобным для вас способом, чтобы сбросить пароль.'),
-        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        content: const Text('Свяжитесь с администратором удобным для вас способом:'),
+        contentPadding: const EdgeInsets.only(top: 16, left: 24, right: 24),
+        actionsPadding: const EdgeInsets.all(16),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.phone, color: Colors.green, size: 32),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final url = Uri.parse('tel:+99363644925');
-              if (await canLaunchUrl(url)) await launchUrl(url);
-            }
-          ),
-          IconButton(
-            icon: const Icon(Icons.sms, color: Colors.blue, size: 32),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final url = Uri.parse('sms:+99363644925?body=Здравствуйте, я забыл пароль от аккаунта M-Service. Помогите восстановить.');
-              if (await canLaunchUrl(url)) await launchUrl(url);
-            }
-          ),
-          IconButton(
-            icon: const Icon(Icons.chat, color: Colors.orange, size: 32),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _openGuestChat();
-            }
-          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.phone, color: Colors.green),
+                title: const Text('Позвонить'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final url = Uri.parse('tel:+99363644925');
+                  if (await canLaunchUrl(url)) await launchUrl(url);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sms, color: Colors.blue),
+                title: const Text('Написать SMS'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final url = Uri.parse('sms:+99363644925?body=Здравствуйте, я забыл пароль от аккаунта M-Service. Помогите восстановить.');
+                  if (await canLaunchUrl(url)) await launchUrl(url);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.chat, color: Colors.orange),
+                title: const Text('Чат с поддержкой'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openGuestChat();
+                },
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx), 
+                child: const Text('Отмена', style: TextStyle(color: Colors.grey))
+              )
+            ],
+          )
         ],
       ),
     );
   }
 
-  // --- ЛОГИКА ГОСТЕВОГО ЧАТА ---
+  // --- ИСПРАВЛЕНО: ЛОГИКА ГОСТЕВОГО ЧАТА (ВРЕМЯ УВЕДОМЛЕНИЯ И ЦВЕТ) ---
   void _openGuestChat() {
     final rawPhone = _phoneController.text.trim().replaceAll(' ', '');
     if (rawPhone.length < 8 && _currentCheckingPhone == null) {
-       _showError('Пожалуйста, введите ваш номер телефона (8 цифр) в поле логина, чтобы мы знали, кому отвечать в чате');
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+         content: Text('Укажите ваш номер в поле логина (8 цифр), чтобы мы знали, кому отвечать в чате 🤝', style: TextStyle(fontSize: 15)),
+         backgroundColor: Colors.blueGrey,
+         duration: Duration(seconds: 6), // Висит 6 секунд
+       ));
        return;
     }
     
@@ -348,7 +364,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             behavior: SnackBarBehavior.floating,
                             duration: const Duration(seconds: 4),
                           ));
-                          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+                          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
                         }
                       },
                       child: const Text('ДАЛЕЕ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
@@ -511,7 +527,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.blueGrey[600], fontSize: 15),
                   ),
                 ),
-                const SizedBox(height: 40), // Отступ для плавающей кнопки
+                const SizedBox(height: 40),
               ],
             ),
           ),
@@ -520,12 +536,14 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // --- ИСПРАВЛЕНО: ПРИНУДИТЕЛЬНАЯ ТЕКСТОВАЯ КЛАВИАТУРА ДЛЯ ИМЕНИ ---
   Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText, int? maxLength}) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
       maxLength: maxLength,
+      textCapitalization: keyboardType == TextInputType.name ? TextCapitalization.words : TextCapitalization.none, // Заставляет открывать буквенную клавиатуру
       inputFormatters: keyboardType == TextInputType.phone ? [FilteringTextInputFormatter.digitsOnly] : null,
       style: const TextStyle(fontSize: 16),
       decoration: InputDecoration(
@@ -545,7 +563,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// --- ВИДЖЕТ ВРЕМЕННОГО ЧАТА ДЛЯ НЕЗАРЕГИСТРИРОВАННЫХ ПОЛЬЗОВАТЕЛЕЙ ---
+// --- ВИДЖЕТ ВРЕМЕННОГО ЧАТА ---
 class GuestChatWidget extends StatefulWidget {
   final String phone;
   const GuestChatWidget({super.key, required this.phone});
@@ -568,7 +586,6 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
     final chatId = 'guest_${widget.phone}';
     final chatRef = db.collection('support_chats').doc(chatId);
 
-    // Обновляем сам документ чата
     await chatRef.set({
       'phone': widget.phone,
       'is_guest': true,
@@ -577,7 +594,6 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
       'has_unread_admin': true,
     }, SetOptions(merge: true));
 
-    // Добавляем сообщение
     await chatRef.collection('messages').add({
       'text': text,
       'sender_id': widget.phone,
@@ -592,7 +608,6 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
 
     return Column(
       children: [
-        // Шапка чата
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -617,7 +632,6 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
           ),
         ),
         
-        // Список сообщений
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -671,39 +685,43 @@ class _GuestChatWidgetState extends State<GuestChatWidget> {
           ),
         ),
 
-        // Поле ввода
-        Container(
-          padding: const EdgeInsets.all(8.0),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _msgController,
-                  decoration: InputDecoration(
-                    hintText: 'Введите сообщение...',
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        // --- ИСПРАВЛЕНО: ЗАЩИТА ПОЛЯ ВВОДА ОТ СИСТЕМНЫХ КНОПОК ---
+        SafeArea(
+          bottom: true,
+          child: Container(
+            padding: const EdgeInsets.all(8.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _msgController,
+                    decoration: InputDecoration(
+                      hintText: 'Введите сообщение...',
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              CircleAvatar(
-                backgroundColor: Colors.orange,
-                child: IconButton(
-                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                  onPressed: _sendMessage,
-                ),
-              )
-            ],
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: Colors.orange,
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                    onPressed: _sendMessage,
+                  ),
+                )
+              ],
+            ),
           ),
         )
       ],
     );
   }
 }
+
