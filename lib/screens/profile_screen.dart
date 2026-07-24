@@ -552,7 +552,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Card(
                   color: Colors.orange[50],
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange[200]!)),
+                  // ИСПРАВЛЕНИЕ: Используем side: BorderSide вместо border: Border.all
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.orange[200]!)),
                   child: ListTile(
                     leading: const Icon(Icons.person_add_alt_1, color: Colors.orange),
                     title: const Text('Заполнить профиль', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
