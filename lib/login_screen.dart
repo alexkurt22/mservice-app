@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
           .where('status', isEqualTo: 'pending')
           .get();
 
-      if (pendingSnapshot.docs.isEmpty) return; // Нет ожидающих баллов
+      if (pendingSnapshot.docs.isEmpty) return; 
 
       int totalBonus = 0;
       final batch = db.batch();
@@ -47,10 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
         
         totalBonus += amount;
 
-        // 1. Меняем статус транзакции на completed
         batch.update(doc.reference, {'status': 'completed'});
 
-        // 2. Добавляем запись в историю бонусов клиента
         final historyRef = clientRef.collection('bonus_history').doc();
         batch.set(historyRef, {
           'amount': amount,
@@ -59,15 +57,12 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
 
-      // 3. Зачисляем баллы на баланс клиента (используем increment для безопасности)
       batch.set(clientRef, {
         'bonus_points': FieldValue.increment(totalBonus)
       }, SetOptions(merge: true));
 
-      // Отправляем все изменения разом
       await batch.commit();
 
-      // Показываем красивое уведомление
       if (mounted && totalBonus > 0) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Вам зачислено $totalBonus подарочных баллов от друзей! 🎉'),
@@ -113,7 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
               await prefs.setString('phone', fullPhone);
               await prefs.setString('client_name', data['name'] ?? 'Клиент');
               
-              // 🔥 ПЕРЕХВАТ БАЛЛОВ ПРИ ВХОДЕ 🔥
               await _capturePendingBonuses(fullPhone);
 
               if (mounted) {
@@ -161,6 +155,24 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
 
+        // 🔥 ШАГ 1: ТОЧНЫЙ ЗАПРОС ПРИВЕТСТВЕННОГО БОНУСА ИЗ БАЗЫ 🔥
+        int welcomeBonus = 10; // Дефолтное значение, если база недоступна
+        try {
+          final loyaltyDoc = await FirebaseFirestore.instance
+              .collection('settings')
+              .doc('loyalty')
+              .get();
+              
+          if (loyaltyDoc.exists && loyaltyDoc.data() != null) {
+            final data = loyaltyDoc.data()!;
+            if (data.containsKey('welcome_points')) {
+              welcomeBonus = (data['welcome_points'] as num).toInt();
+            }
+          }
+        } catch (e) {
+          debugPrint('Ошибка при получении бонуса за регистрацию: $e');
+        }
+
         final String generatedCode = (Random().nextInt(9000) + 1000).toString();
 
         await FirebaseFirestore.instance.collection('clients').doc(fullPhone).set({
@@ -171,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
           'is_approved': false,
           'sms_code': generatedCode,
           'rejection_reason': null,
-          'bonus_points': 500, // <--- АВТОМАТИЧЕСКИЕ ПРИВЕТСТВЕННЫЕ БАЛЛЫ
+          'bonus_points': welcomeBonus, // <-- ПРАВИЛЬНЫЙ БОНУС ИЗ АДМИНКИ
         });
 
         setState(() {
@@ -221,6 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final bool isApproved = data['is_approved'] ?? false;
         final String? rejectionReason = data['rejection_reason'];
         final String smsCode = data['sms_code'] ?? '';
+        final int userPoints = data['bonus_points'] ?? 0; // Получаем баланс для уведомления
 
         return SafeArea(
           child: Center(
@@ -244,10 +257,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         await prefs.setString('phone', _currentCheckingPhone!);
                         await prefs.setString('client_name', data['name'] ?? 'Клиент');
                         
-                        // 🔥 ПЕРЕХВАТ БАЛЛОВ ПРИ ЗАВЕРШЕНИИ РЕГИСТРАЦИИ 🔥
                         await _capturePendingBonuses(_currentCheckingPhone!);
 
-                        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+                        if (mounted) {
+                          // 🔥 ШАГ 2: УВЕДОМЛЕНИЕ ПРИ УСПЕШНОМ ВХОДЕ 🔥
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Вам начислено $userPoints приветственных баллов 🎁'),
+                            backgroundColor: Colors.green[700],
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 4),
+                          ));
+
+                          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+                        }
                       },
                       child: const Text('ДАЛЕЕ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
