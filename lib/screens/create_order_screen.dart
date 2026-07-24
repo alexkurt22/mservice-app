@@ -142,7 +142,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100], // Более светлый фон для контраста
+      backgroundColor: Colors.grey[100], 
       appBar: AppBar(
         title: const Text('Новый заказ', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.blueGrey[900],
@@ -162,7 +162,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   const SizedBox(height: 12),
                   Card(
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade300)),
+                    // ИСПРАВЛЕНИЕ 1: side: BorderSide вместо border: Border.all
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade300)),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
@@ -184,7 +185,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                             onChanged: (val) {
                               setState(() {
                                 _selectedDirection = val;
-                                _selectedSubCategory = null; // Сбрасываем подкатегорию
+                                _selectedSubCategory = null; 
                               });
                             },
                           ),
@@ -216,7 +217,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   const SizedBox(height: 12),
                   Card(
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade300)),
+                    // ИСПРАВЛЕНИЕ 2: side: BorderSide вместо border: Border.all
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade300)),
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: TextField(
@@ -234,7 +236,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     ),
                   ),
 
-                  // --- БЛОК 3: СПОСОБ ОПЛАТЫ (НОВЫЙ UI) ---
+                  // --- БЛОК 3: СПОСОБ ОПЛАТЫ ---
                   const SizedBox(height: 24),
                   const Text('СПОСОБ ОПЛАТЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
                   const SizedBox(height: 12),
@@ -252,7 +254,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         avatar: Icon(_getPaymentIcon(method), color: isSelected ? Colors.white : Colors.blueGrey, size: 18),
                         selectedColor: Colors.blueGrey[900],
                         backgroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? Colors.blueGrey[900]! : Colors.grey.shade300)),
+                        // ИСПРАВЛЕНИЕ 3: side: BorderSide вместо border: Border.all
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isSelected ? Colors.blueGrey[900]! : Colors.grey.shade300)),
                         labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       );
@@ -282,4 +285,3 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 }
-
