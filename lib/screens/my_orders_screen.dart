@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'client_order_details_screen.dart'; // Подключаем новый экран
+import 'client_order_details_screen.dart'; 
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key});
@@ -45,26 +45,27 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 
-  // Функция для получения цвета и иконки по статусу
-  Map<String, dynamic> _getStatusStyle(String status) {
+  Map<String, dynamic> _getStatusStyle(String status, bool isDark) {
     switch (status) {
-      case 'new': return {'color': Colors.blueGrey, 'icon': Icons.inbox, 'text': 'Ожидает'};
+      case 'new': return {'color': isDark ? Colors.blueGrey[300] : Colors.blueGrey, 'icon': Icons.inbox, 'text': 'Ожидает'};
       case 'awaiting_approval': return {'color': Colors.orange, 'icon': Icons.error_outline, 'text': 'Ждет ответа'};
-      case 'in_progress': return {'color': Colors.blue, 'icon': Icons.build, 'text': 'В работе'};
-      case 'completed': return {'color': Colors.green, 'icon': Icons.check_circle, 'text': 'Готово'};
-      case 'canceled': return {'color': Colors.red, 'icon': Icons.cancel, 'text': 'Отменен'};
+      case 'in_progress': return {'color': isDark ? Colors.blue[300] : Colors.blue, 'icon': Icons.build, 'text': 'В работе'};
+      case 'completed': return {'color': isDark ? Colors.green[400] : Colors.green, 'icon': Icons.check_circle, 'text': 'Готово'};
+      case 'canceled': return {'color': isDark ? Colors.red[300] : Colors.red, 'icon': Icons.cancel, 'text': 'Отменен'};
       default: return {'color': Colors.grey, 'icon': Icons.help, 'text': 'Неизвестно'};
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Мои заказы', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: Theme.of(context).cardColor,
+        foregroundColor: isDark ? Colors.white : Colors.black87,
         elevation: 1,
       ),
       body: _phone == null
@@ -84,9 +85,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.inbox_outlined, size: 64, color: Colors.blueGrey[200]),
+                        Icon(Icons.inbox_outlined, size: 64, color: isDark ? Colors.grey[700] : Colors.blueGrey[200]),
                         const SizedBox(height: 16),
-                        Text('У вас пока нет заказов', style: TextStyle(fontSize: 16, color: Colors.blueGrey[500])),
+                        Text('У вас пока нет заказов', style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[500] : Colors.blueGrey[500])),
                       ],
                     ),
                   );
@@ -94,7 +95,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
                 final docs = snapshot.data!.docs.toList();
                 
-                // Сортировка: Требующие ответа -> Новые -> В работе -> Готовые
                 docs.sort((a, b) {
                   final dataA = a.data() as Map<String, dynamic>;
                   final dataB = b.data() as Map<String, dynamic>;
@@ -121,16 +121,19 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     final order = docs[index];
                     final data = order.data() as Map<String, dynamic>;
                     final status = data['status'] ?? '';
-                    final style = _getStatusStyle(status);
+                    final style = _getStatusStyle(status, isDark);
 
                     return Card(
                       elevation: 1,
                       margin: const EdgeInsets.only(bottom: 12.0),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      color: Theme.of(context).cardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.transparent)
+                      ),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(16),
                         onTap: () {
-                          // ПЕРЕХОД НА НОВЫЙ ЭКРАН ДЕТАЛЕЙ
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -155,13 +158,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(data['device_type'] ?? 'Устройство', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text(data['device_type'] ?? 'Устройство', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                                     const SizedBox(height: 4),
                                     Text(
                                       data['problem'] ?? '', 
                                       maxLines: 1, 
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                                      style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13),
                                     ),
                                   ],
                                 ),
@@ -173,7 +176,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                                   Text(style['text'], style: TextStyle(color: style['color'], fontWeight: FontWeight.bold, fontSize: 12)),
                                   const SizedBox(height: 4),
                                   if (data.containsKey('price'))
-                                    Text('${data['price']} TMT', style: const TextStyle(fontWeight: FontWeight.w900)),
+                                    Text('${data['price']} TMT', style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87)),
                                 ],
                               ),
                             ],
@@ -188,4 +191,3 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     );
   }
 }
-
