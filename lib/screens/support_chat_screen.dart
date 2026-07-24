@@ -79,18 +79,34 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         text 
       );
     } catch (e) {
-      print('Push send failed: $e');
+      debugPrint('Push send failed: $e');
     }
+  }
+
+  // --- УМНЫЙ ФОРМАТЕР ДАТЫ ДЛЯ РАЗДЕЛИТЕЛЯ ---
+  String _getDateSeparatorText(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final msgDate = DateTime(date.year, date.month, date.day);
+
+    if (msgDate == today) return 'Сегодня';
+    if (msgDate == yesterday) return 'Вчера';
+    return DateFormat('dd.MM.yyyy').format(date);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Проверяем, какая тема сейчас активна на устройстве
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Чат с мастером'), 
-        backgroundColor: Colors.blueGrey[900], 
-        foregroundColor: Colors.white
+        title: const Text('Чат с поддержкой', style: TextStyle(fontWeight: FontWeight.bold)), 
+        backgroundColor: isDark ? Colors.grey[900] : Colors.blueGrey[900], 
+        foregroundColor: Colors.white,
+        elevation: 1,
       ),
       body: _roomId == null 
         ? const Center(child: CircularProgressIndicator())
@@ -126,9 +142,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                           });
                         }
                         
+                        // Логика показа разделителя дат
                         bool showDate = false;
                         if (i == messages.length - 1) {
-                          showDate = true;
+                          showDate = true; // Самое первое сообщение (внизу списка, так как reverse)
                         } else {
                           final prevData = messages[i+1].data() as Map<String, dynamic>;
                           final prevTs = prevData['created_at'] as Timestamp?;
@@ -137,37 +154,72 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                           }
                         }
 
+                        // Настраиваем цвета пузырей в зависимости от темы
+                        final bubbleColor = isMe 
+                            ? (isDark ? Colors.blueGrey[700] : Colors.blue[100]) 
+                            : (isDark ? Colors.grey[800] : Colors.white);
+                        final textColor = isDark ? Colors.white : Colors.black87;
+                        final timeColor = isDark ? Colors.white54 : Colors.grey[600];
+
                         return Column(
                           children: [
-                            if (showDate) Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Text(DateFormat('dd MMM yyyy').format(dt), style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
-                            ),
+                            // --- КРАСИВЫЙ РАЗДЕЛИТЕЛЬ ПО ДАТАМ ---
+                            if (showDate) 
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                                child: Row(
+                                  children: [
+                                    Expanded(child: Divider(color: isDark ? Colors.grey[700] : Colors.grey[300], thickness: 1)),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? Colors.grey[800] : Colors.grey[200],
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          _getDateSeparatorText(dt),
+                                          style: TextStyle(color: isDark ? Colors.white70 : Colors.blueGrey, fontSize: 12, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(child: Divider(color: isDark ? Colors.grey[700] : Colors.grey[300], thickness: 1)),
+                                  ],
+                                ),
+                              ),
+                            
+                            // --- ПУЗЫРЬ СООБЩЕНИЯ ---
                             Align(
                               alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                               child: Container(
                                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: isMe ? Colors.blue[50] : Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
+                                  color: bubbleColor,
+                                  borderRadius: BorderRadius.circular(16).copyWith(
+                                    bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(16),
+                                    bottomLeft: !isMe ? const Radius.circular(4) : const Radius.circular(16),
+                                  ),
                                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
                                 ),
                                 child: Column(
                                   crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                                   children: [
-                                    Text(data['text'], style: const TextStyle(fontSize: 16, color: Colors.black87)),
+                                    Text(data['text'], style: TextStyle(fontSize: 15, color: textColor)),
                                     const SizedBox(height: 4),
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(DateFormat('HH:mm').format(dt), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                        Text(DateFormat('HH:mm').format(dt), style: TextStyle(fontSize: 11, color: timeColor)),
                                         if (isMe) ...[
                                           const SizedBox(width: 4),
                                           Icon(
                                             data['is_read'] == true ? Icons.done_all : Icons.check, 
                                             size: 14, 
-                                            color: data['is_read'] == true ? Colors.blue[600] : Colors.grey
+                                            color: data['is_read'] == true 
+                                                ? (isDark ? Colors.blue[300] : Colors.blue[600]) 
+                                                : timeColor,
                                           ),
                                         ]
                                       ],
@@ -183,19 +235,27 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                   },
                 ),
               ),
+              
+              // --- ПОЛЕ ВВОДА ---
               SafeArea(
                 top: false,
-                child: Padding(
+                child: Container(
                   padding: const EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
+                  ),
                   child: Row(
                     children: [
                       Expanded(
                         child: TextField(
                           controller: _controller, 
+                          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                           decoration: InputDecoration(
-                            hintText: 'Напишите мастеру...', 
+                            hintText: 'Напишите сообщение...', 
+                            hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
                             filled: true,
-                            fillColor: Colors.white,
+                            fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none)
                           )
@@ -203,9 +263,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                       ),
                       const SizedBox(width: 8),
                       CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.blueGrey[900], 
-                        child: IconButton(icon: const Icon(Icons.send, color: Colors.white), onPressed: _sendMessage),
+                        radius: 22,
+                        backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900], 
+                        child: IconButton(icon: const Icon(Icons.send, color: Colors.white, size: 20), onPressed: _sendMessage),
                       ),
                     ],
                   ),
@@ -216,4 +276,3 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     );
   }
 }
-
