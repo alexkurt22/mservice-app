@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'home_screen.dart';
+import 'main.dart'; // Подключаем для доступа к глобальному themeNotifier
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -235,7 +236,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- ОКНО "ЗАБЫЛИ ПАРОЛЬ" С ПОДПИСЯМИ ---
   void _showForgotPasswordDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
@@ -289,7 +289,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- ЛОГИКА ГОСТЕВОГО ЧАТА ---
   void _openGuestChat() {
     final rawPhone = _phoneController.text.trim().replaceAll(' ', '');
     if (rawPhone.length < 8 && _currentCheckingPhone == null) {
@@ -427,6 +426,35 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // --- ВИДЖЕТ КНОПКИ ПЕРЕКЛЮЧЕНИЯ ТЕМЫ ---
+  Widget _buildThemeToggle(bool isDark) {
+    return Positioned(
+      top: 16,
+      right: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            )
+          ]
+        ),
+        child: IconButton(
+          icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: isDark ? Colors.orange : Colors.blueGrey[900]),
+          onPressed: () async {
+            themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('is_dark_theme', !isDark);
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -434,7 +462,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_currentCheckingPhone != null) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor, 
-        body: _buildVerificationScreen(isDark),
+        body: Stack(
+          children: [
+            _buildVerificationScreen(isDark),
+            SafeArea(child: _buildThemeToggle(isDark)),
+          ],
+        ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _openGuestChat,
           backgroundColor: Colors.orange,
@@ -452,95 +485,100 @@ class _LoginScreenState extends State<LoginScreen> {
         icon: const Icon(Icons.support_agent, color: Colors.white),
         label: const Text('Помощь', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(Icons.business_center, size: 48, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[900]),
-                const SizedBox(height: 16),
-                Text(
-                  'M-SERVICE',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.blueGrey[900], letterSpacing: 1.5),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _isLogin ? 'ВХОД В СИСТЕМУ' : 'РЕГИСТРАЦИЯ',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1.0),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
-
-                if (!_isLogin) ...[
-                  _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.name, isDark: isDark),
-                  const SizedBox(height: 16),
-                ],
-
-                _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 ', maxLength: 8, isDark: isDark),
-                const SizedBox(height: 16),
-
-                _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов', isDark: isDark),
-                const SizedBox(height: 16),
-
-                if (!_isLogin) ...[
-                  _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true, isDark: isDark),
-                ],
-
-                if (_isLogin)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _showForgotPasswordDialog,
-                      child: Text('Забыли пароль?', style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blueGrey[700])),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Icon(Icons.business_center, size: 48, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[900]),
+                    const SizedBox(height: 16),
+                    Text(
+                      'M-SERVICE',
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.blueGrey[900], letterSpacing: 1.5),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _isLogin ? 'ВХОД В СИСТЕМУ' : 'РЕГИСТРАЦИЯ',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1.0),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 48),
 
-                SizedBox(height: _isLogin ? 16 : 32),
+                    if (!_isLogin) ...[
+                      _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.name, isDark: isDark),
+                      const SizedBox(height: 16),
+                    ],
 
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
-                  onPressed: _isLoading ? null : _submit,
-                  child: _isLoading 
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                      : Text(_isLogin ? 'ВОЙТИ' : 'ОТПРАВИТЬ', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                    _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 ', maxLength: 8, isDark: isDark),
+                    const SizedBox(height: 16),
+
+                    _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов', isDark: isDark),
+                    const SizedBox(height: 16),
+
+                    if (!_isLogin) ...[
+                      _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true, isDark: isDark),
+                    ],
+
+                    if (_isLogin)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _showForgotPasswordDialog,
+                          child: Text('Забыли пароль?', style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blueGrey[700])),
+                        ),
+                      ),
+
+                    SizedBox(height: _isLogin ? 16 : 32),
+
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      onPressed: _isLoading ? null : _submit,
+                      child: _isLoading 
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                          : Text(_isLogin ? 'ВОЙТИ' : 'ОТПРАВИТЬ', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                    ),
+                    const SizedBox(height: 24),
+
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _isLogin = !_isLogin;
+                          _phoneController.clear();
+                          _passwordController.clear();
+                          _nameController.clear();
+                          _confirmPasswordController.clear();
+                        });
+                      },
+                      child: Text(
+                        _isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти',
+                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.blueGrey[600], fontSize: 15),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
-                const SizedBox(height: 24),
-
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _isLogin = !_isLogin;
-                      _phoneController.clear();
-                      _passwordController.clear();
-                      _nameController.clear();
-                      _confirmPasswordController.clear();
-                    });
-                  },
-                  child: Text(
-                    _isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти',
-                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.blueGrey[600], fontSize: 15),
-                  ),
-                ),
-                const SizedBox(height: 40),
-              ],
+              ),
             ),
           ),
-        ),
+          // Добавляем переключатель темы поверх всего контента
+          SafeArea(child: _buildThemeToggle(isDark)),
+        ],
       ),
     );
   }
 
-  // --- АДАПТИРОВАННОЕ ТЕКСТОВОЕ ПОЛЕ ---
   Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool obscureText = false, TextInputType? keyboardType, String? prefixText, String? hintText, int? maxLength, required bool isDark}) {
     return TextField(
       controller: controller,
@@ -569,7 +607,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// --- ВИДЖЕТ ВРЕМЕННОГО ЧАТА ---
 class GuestChatWidget extends StatefulWidget {
   final String phone;
   const GuestChatWidget({super.key, required this.phone});
