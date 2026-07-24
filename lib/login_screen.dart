@@ -25,7 +25,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? _currentCheckingPhone;
 
-  // --- ЛОГИКА ЗАХВАТА ОЖИДАЮЩИХ БОНУСОВ ---
   Future<void> _capturePendingBonuses(String phone) async {
     try {
       final db = FirebaseFirestore.instance;
@@ -334,91 +333,89 @@ class _LoginScreenState extends State<LoginScreen> {
         final String smsCode = data['sms_code'] ?? '';
         final int userPoints = data['bonus_points'] ?? 0;
 
-        return SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(32.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (isApproved) ...[
-                    const Icon(Icons.check_circle, size: 80, color: Colors.green),
-                    const SizedBox(height: 24),
-                    Text('Спасибо за регистрацию!', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                    const SizedBox(height: 16),
-                    const Text('Ваш аккаунт успешно подтвержден.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.grey)),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], padding: const EdgeInsets.symmetric(vertical: 16)),
-                      onPressed: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setString('phone', _currentCheckingPhone!);
-                        await prefs.setString('client_name', data['name'] ?? 'Клиент');
-                        
-                        await _capturePendingBonuses(_currentCheckingPhone!);
+        return Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (isApproved) ...[
+                  const Icon(Icons.check_circle, size: 80, color: Colors.green),
+                  const SizedBox(height: 24),
+                  Text('Спасибо за регистрацию!', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 16),
+                  const Text('Ваш аккаунт успешно подтвержден.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.grey)),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], padding: const EdgeInsets.symmetric(vertical: 16)),
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('phone', _currentCheckingPhone!);
+                      await prefs.setString('client_name', data['name'] ?? 'Клиент');
+                      
+                      await _capturePendingBonuses(_currentCheckingPhone!);
 
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Вам начислено $userPoints приветственных бонусов 🎁'),
-                            backgroundColor: Colors.green[700],
-                            behavior: SnackBarBehavior.floating,
-                            duration: const Duration(seconds: 4),
-                          ));
-                          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
-                        }
-                      },
-                      child: const Text('ДАЛЕЕ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Вам начислено $userPoints приветственных бонусов 🎁'),
+                          backgroundColor: Colors.green[700],
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 4),
+                        ));
+                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+                      }
+                    },
+                    child: const Text('ДАЛЕЕ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                ] 
+                else if (rejectionReason != null && rejectionReason.isNotEmpty) ...[
+                  const Icon(Icons.cancel, size: 80, color: Colors.red),
+                  const SizedBox(height: 24),
+                  const Text('Регистрация отклонена', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
+                  const SizedBox(height: 16),
+                  Text('Введены неверные данные.\nПричина: $rejectionReason', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black87)),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
+                    onPressed: () => setState(() => _currentCheckingPhone = null),
+                    child: const Text('ИЗМЕНИТЬ НОМЕР ТЕЛЕФОНА', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ] 
+                else ...[
+                  const Icon(Icons.mark_email_unread, size: 80, color: Colors.orange),
+                  const SizedBox(height: 24),
+                  Text('Подтверждение номера', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 16),
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black87, height: 1.5),
+                      children: [
+                        const TextSpan(text: 'Для завершения регистрации отправьте SMS с кодом '),
+                        TextSpan(text: smsCode, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: isDark ? Colors.blue[300] : Colors.blueGrey)),
+                        const TextSpan(text: ' на номер администратора.'),
+                      ],
                     ),
-                  ] 
-                  else if (rejectionReason != null && rejectionReason.isNotEmpty) ...[
-                    const Icon(Icons.cancel, size: 80, color: Colors.red),
-                    const SizedBox(height: 24),
-                    const Text('Регистрация отклонена', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
-                    const SizedBox(height: 16),
-                    Text('Введены неверные данные.\nПричина: $rejectionReason', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black87)),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
-                      onPressed: () => setState(() => _currentCheckingPhone = null),
-                      child: const Text('ИЗМЕНИТЬ НОМЕР ТЕЛЕФОНА', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ] 
-                  else ...[
-                    const Icon(Icons.mark_email_unread, size: 80, color: Colors.orange),
-                    const SizedBox(height: 24),
-                    Text('Подтверждение номера', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                    const SizedBox(height: 16),
-                    RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black87, height: 1.5),
-                        children: [
-                          const TextSpan(text: 'Для завершения регистрации отправьте SMS с кодом '),
-                          TextSpan(text: smsCode, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: isDark ? Colors.blue[300] : Colors.blueGrey)),
-                          const TextSpan(text: ' на номер администратора.'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
-                      onPressed: () => _sendSms(smsCode),
-                      icon: const Icon(Icons.sms, color: Colors.white),
-                      label: const Text('ОТПРАВИТЬ SMS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(height: 32),
-                    const CircularProgressIndicator(color: Colors.orange),
-                    const SizedBox(height: 16),
-                    const Text('Ожидание подтверждения администратором...', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-                    const SizedBox(height: 32),
-                    TextButton(
-                      onPressed: () => setState(() => _currentCheckingPhone = null),
-                      child: const Text('Вернуться назад', style: TextStyle(color: Colors.grey)),
-                    )
-                  ]
-                ],
-              ),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900], padding: const EdgeInsets.symmetric(vertical: 16)),
+                    onPressed: () => _sendSms(smsCode),
+                    icon: const Icon(Icons.sms, color: Colors.white),
+                    label: const Text('ОТПРАВИТЬ SMS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(height: 32),
+                  const CircularProgressIndicator(color: Colors.orange),
+                  const SizedBox(height: 16),
+                  const Text('Ожидание подтверждения администратором...', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 32),
+                  TextButton(
+                    onPressed: () => setState(() => _currentCheckingPhone = null),
+                    child: const Text('Вернуться назад', style: TextStyle(color: Colors.grey)),
+                  )
+                ]
+              ],
             ),
           ),
         );
@@ -426,31 +423,35 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- ВИДЖЕТ КНОПКИ ПЕРЕКЛЮЧЕНИЯ ТЕМЫ ---
-  Widget _buildThemeToggle(bool isDark) {
-    return Positioned(
-      top: 16,
-      right: 16,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            )
-          ]
-        ),
-        child: IconButton(
-          icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: isDark ? Colors.orange : Colors.blueGrey[900]),
-          onPressed: () async {
-            themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool('is_dark_theme', !isDark);
-          },
-        ),
+  // --- БЕЗОПАСНАЯ КНОПКА ПЕРЕКЛЮЧЕНИЯ ТЕМЫ ---
+  Widget _buildThemeToggleButton(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                )
+              ]
+            ),
+            child: IconButton(
+              icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: isDark ? Colors.orange : Colors.blueGrey[900]),
+              onPressed: () async {
+                themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('is_dark_theme', !isDark);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -462,11 +463,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_currentCheckingPhone != null) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor, 
-        body: Stack(
-          children: [
-            _buildVerificationScreen(isDark),
-            SafeArea(child: _buildThemeToggle(isDark)),
-          ],
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildThemeToggleButton(isDark),
+              Expanded(child: _buildVerificationScreen(isDark)),
+            ],
+          ),
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _openGuestChat,
@@ -485,96 +488,97 @@ class _LoginScreenState extends State<LoginScreen> {
         icon: const Icon(Icons.support_agent, color: Colors.white),
         label: const Text('Помощь', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Icon(Icons.business_center, size: 48, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[900]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'M-SERVICE',
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.blueGrey[900], letterSpacing: 1.5),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _isLogin ? 'ВХОД В СИСТЕМУ' : 'РЕГИСТРАЦИЯ',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1.0),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 48),
-
-                    if (!_isLogin) ...[
-                      _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.name, isDark: isDark),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildThemeToggleButton(isDark),
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Icon(Icons.business_center, size: 48, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[900]),
                       const SizedBox(height: 16),
-                    ],
+                      Text(
+                        'M-SERVICE',
+                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.blueGrey[900], letterSpacing: 1.5),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _isLogin ? 'ВХОД В СИСТЕМУ' : 'РЕГИСТРАЦИЯ',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1.0),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 48),
 
-                    _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 ', maxLength: 8, isDark: isDark),
-                    const SizedBox(height: 16),
+                      if (!_isLogin) ...[
+                        _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.name, isDark: isDark),
+                        const SizedBox(height: 16),
+                      ],
 
-                    _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов', isDark: isDark),
-                    const SizedBox(height: 16),
+                      _buildTextField(_phoneController, 'Номер телефона', Icons.phone, keyboardType: TextInputType.phone, prefixText: '+993 ', maxLength: 8, isDark: isDark),
+                      const SizedBox(height: 16),
 
-                    if (!_isLogin) ...[
-                      _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true, isDark: isDark),
-                    ],
+                      _buildTextField(_passwordController, 'Пароль', Icons.lock, obscureText: true, hintText: 'Минимум 6 символов', isDark: isDark),
+                      const SizedBox(height: 16),
 
-                    if (_isLogin)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _showForgotPasswordDialog,
-                          child: Text('Забыли пароль?', style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blueGrey[700])),
+                      if (!_isLogin) ...[
+                        _buildTextField(_confirmPasswordController, 'Повторите пароль', Icons.lock_outline, obscureText: true, isDark: isDark),
+                      ],
+
+                      if (_isLogin)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _showForgotPasswordDialog,
+                            child: Text('Забыли пароль?', style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blueGrey[700])),
+                          ),
+                        ),
+
+                      SizedBox(height: _isLogin ? 16 : 32),
+
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                        onPressed: _isLoading ? null : _submit,
+                        child: _isLoading 
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                            : Text(_isLogin ? 'ВОЙТИ' : 'ОТПРАВИТЬ', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                      ),
+                      const SizedBox(height: 24),
+
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isLogin = !_isLogin;
+                            _phoneController.clear();
+                            _passwordController.clear();
+                            _nameController.clear();
+                            _confirmPasswordController.clear();
+                          });
+                        },
+                        child: Text(
+                          _isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти',
+                          style: TextStyle(color: isDark ? Colors.grey[400] : Colors.blueGrey[600], fontSize: 15),
                         ),
                       ),
-
-                    SizedBox(height: _isLogin ? 16 : 32),
-
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      onPressed: _isLoading ? null : _submit,
-                      child: _isLoading 
-                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                          : Text(_isLogin ? 'ВОЙТИ' : 'ОТПРАВИТЬ', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
-                    ),
-                    const SizedBox(height: 24),
-
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isLogin = !_isLogin;
-                          _phoneController.clear();
-                          _passwordController.clear();
-                          _nameController.clear();
-                          _confirmPasswordController.clear();
-                        });
-                      },
-                      child: Text(
-                        _isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти',
-                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.blueGrey[600], fontSize: 15),
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                  ],
+                      const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          // Добавляем переключатель темы поверх всего контента
-          SafeArea(child: _buildThemeToggle(isDark)),
-        ],
+          ],
+        ),
       ),
     );
   }
