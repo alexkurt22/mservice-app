@@ -8,12 +8,14 @@ class BonusHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('История баллов', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        title: const Text('История бонусов', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Theme.of(context).cardColor,
+        foregroundColor: isDark ? Colors.white : Colors.black87,
         elevation: 1,
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -34,9 +36,9 @@ class BonusHistoryScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history, size: 64, color: Colors.blueGrey[200]),
+                  Icon(Icons.history, size: 64, color: isDark ? Colors.grey[700] : Colors.blueGrey[200]),
                   const SizedBox(height: 16),
-                  Text('История операций пуста', style: TextStyle(fontSize: 16, color: Colors.blueGrey[500])),
+                  Text('История операций пуста', style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[500] : Colors.blueGrey[500])),
                 ],
               ),
             );
@@ -47,7 +49,7 @@ class BonusHistoryScreen extends StatelessWidget {
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: docs.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.grey[800] : Colors.grey[300]),
             itemBuilder: (context, index) {
               final data = docs[index].data() as Map<String, dynamic>;
               final int amount = data['amount'] ?? 0;
@@ -63,24 +65,26 @@ class BonusHistoryScreen extends StatelessWidget {
               final isPositive = amount > 0;
 
               return Container(
-                color: Colors.white,
+                color: Theme.of(context).cardColor,
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   leading: CircleAvatar(
-                    backgroundColor: isPositive ? Colors.green[50] : Colors.orange[50],
+                    backgroundColor: isPositive 
+                        ? (isDark ? Colors.green[900]?.withOpacity(0.3) : Colors.green[50]) 
+                        : (isDark ? Colors.orange[900]?.withOpacity(0.3) : Colors.orange[50]),
                     child: Icon(
                       isPositive ? Icons.add_circle : Icons.remove_circle,
                       color: isPositive ? Colors.green : Colors.orange,
                     ),
                   ),
-                  title: Text(description, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text(timeStr, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                  title: Text(description, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87)),
+                  subtitle: Text(timeStr, style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 12)),
                   trailing: Text(
                     isPositive ? '+$amount' : amount.toString(),
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 16,
-                      color: isPositive ? Colors.green[700] : Colors.orange[700],
+                      color: isPositive ? Colors.green[500] : Colors.orange[500],
                     ),
                   ),
                 ),
