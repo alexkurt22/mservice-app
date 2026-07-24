@@ -23,9 +23,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   
-  // --- ОБНОВЛЕННАЯ ЛОГИКА ВЫХОДА С ПОДТВЕРЖДЕНИЕМ ---
+  // --- ЛОГИКА ВЫХОДА С ПОДТВЕРЖДЕНИЕМ ---
   Future<void> _logout() async {
-    // 1. Показываем диалог подтверждения
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -41,12 +40,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           content: const Text('Вы точно хотите выйти из своего аккаунта?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false), // Отмена
+              onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Отмена', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-              onPressed: () => Navigator.of(context).pop(true), // Подтверждение
+              onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Выйти', style: TextStyle(color: Colors.white)),
             ),
           ],
@@ -54,10 +53,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
 
-    // 2. Если пользователь нажал "Отмена" или просто закрыл окно - прерываем функцию
     if (confirm != true) return;
 
-    // 3. Если подтвердил - выполняем выход
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     if (!mounted) return;
@@ -73,7 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (await canLaunchUrl(url)) await launchUrl(url);
   }
 
-  // --- ЛОГИКА ПЕРЕВОДА БАЛЛОВ ---
+  // --- ЛОГИКА ПЕРЕВОДА БОНУСОВ ---
   void _showTransferDialog(int currentBalance) {
     final phoneController = TextEditingController(text: '+993');
     final amountController = TextEditingController();
@@ -86,11 +83,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (context, setStateDialog) {
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('Поделиться баллами', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            title: const Text('Поделиться бонусами', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Баллы будут зачислены другу. Если у него нет приложения, они будут "в ожидании" до регистрации.', style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                const Text('Бонусы будут зачислены другу. Если у него нет приложения, они будут "в ожидании" до регистрации.', style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: phoneController,
@@ -107,7 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   controller: amountController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'Количество баллов',
+                    labelText: 'Количество бонусов',
                     filled: true, fillColor: Colors.grey[100],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     prefixIcon: const Icon(Icons.stars_rounded, color: Colors.orange),
@@ -130,11 +127,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           return;
                         }
                         if (amount > currentBalance) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Недостаточно баллов'), backgroundColor: Colors.red));
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Недостаточно бонусов'), backgroundColor: Colors.red));
                           return;
                         }
                         if (recipientPhone == widget.phone) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нельзя отправить баллы самому себе'), backgroundColor: Colors.red));
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нельзя отправить бонусы самому себе'), backgroundColor: Colors.red));
                           return;
                         }
 
@@ -166,11 +163,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final recipientDoc = await transaction.get(recipientRef);
         
         int currentBalance = senderDoc.data()?['bonus_points'] ?? 0;
-        if (currentBalance < amount) throw Exception('Недостаточно баллов');
+        if (currentBalance < amount) throw Exception('Недостаточно бонусов');
 
-        // Списываем у отправителя
         transaction.update(senderRef, {'bonus_points': currentBalance - amount});
-        // Записываем в историю отправителя
         transaction.set(senderHistoryRef, {
           'amount': -amount,
           'description': 'Перевод другу: $recipientPhone',
@@ -178,7 +173,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
 
         if (recipientDoc.exists) {
-          // Друг ЕСТЬ в базе (Моментальный перевод)
           int recipientBalance = recipientDoc.data()?['bonus_points'] ?? 0;
           transaction.update(recipientRef, {'bonus_points': recipientBalance + amount});
           
@@ -197,9 +191,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'type': 'internal',
             'created_at': FieldValue.serverTimestamp(),
           });
-          statusText = 'Баллы успешно переведены!';
+          statusText = 'Бонусы успешно переведены!';
         } else {
-          // Друга НЕТ в базе (Заморозка/Ожидание)
           isPending = true;
           transaction.set(transactionRef, {
             'sender_phone': widget.phone,
@@ -209,17 +202,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'type': 'referral',
             'created_at': FieldValue.serverTimestamp(),
           });
-          statusText = 'Баллы заморожены. Друг получит их после скачивания!';
+          statusText = 'Бонусы заморожены. Друг получит их после скачивания!';
         }
       });
 
       if (mounted) {
-        Navigator.pop(dialogContext); // Закрываем диалог
+        Navigator.pop(dialogContext); 
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(statusText), backgroundColor: Colors.green));
         
-        // Если друга нет, предлагаем отправить ему СМС со ссылкой
         if (isPending) {
-           final smsUrl = Uri.parse('sms:$recipientPhone?body=Я отправил тебе $amount баллов на ремонт техники! Скачай приложение M-Service, чтобы забрать их.');
+           final smsUrl = Uri.parse('sms:$recipientPhone?body=Я отправил тебе $amount бонусов на ремонт техники! Скачай приложение M-Service, чтобы забрать их.');
            if (await canLaunchUrl(smsUrl)) {
              await launchUrl(smsUrl);
            }
@@ -231,6 +223,171 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка перевода: $e'), backgroundColor: Colors.red));
       }
     }
+  }
+
+  // --- ОКНО ВВОДА ДАННЫХ ПРОФИЛЯ ---
+  Future<void> _showProfileForm() async {
+    String? selectedGender;
+    DateTime? selectedDate;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Личные данные', style: TextStyle(fontWeight: FontWeight.bold)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Укажите данные для получения подарков на День Рождения. Внимание: изменить их позже нельзя!', style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  decoration: InputDecoration(
+                    labelText: 'Ваш пол', 
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+                  ),
+                  value: selectedGender,
+                  items: const [
+                    DropdownMenuItem(value: 'Мужской', child: Text('Мужской')),
+                    DropdownMenuItem(value: 'Женский', child: Text('Женский')),
+                  ],
+                  onChanged: (val) => setStateDialog(() => selectedGender = val),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime(2000),
+                      firstDate: DateTime(1930),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) setStateDialog(() => selectedDate = date);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(12)
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(selectedDate == null ? 'Дата рождения' : '${selectedDate!.day.toString().padLeft(2,'0')}.${selectedDate!.month.toString().padLeft(2,'0')}.${selectedDate!.year}', style: TextStyle(fontSize: 16, color: selectedDate == null ? Colors.grey[600] : Colors.black87)),
+                        const Icon(Icons.calendar_today, color: Colors.blueGrey),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Позже', style: TextStyle(color: Colors.grey))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600]),
+                onPressed: (selectedGender != null && selectedDate != null) ? () async {
+                  final formattedDate = '${selectedDate!.day.toString().padLeft(2,'0')}.${selectedDate!.month.toString().padLeft(2,'0')}.${selectedDate!.year}';
+                  await FirebaseFirestore.instance.collection('clients').doc(widget.phone).set({
+                    'gender': selectedGender,
+                    'birth_date': formattedDate,
+                  }, SetOptions(merge: true));
+                  if (mounted) Navigator.pop(ctx);
+                } : null,
+                child: const Text('Сохранить', style: TextStyle(color: Colors.white)),
+              )
+            ],
+          );
+        }
+      ),
+    );
+  }
+
+  // --- ОКНО ПРАВИЛ И ЦЕН ---
+  void _showRulesDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.gavel, color: Colors.blueGrey),
+            SizedBox(width: 8),
+            Expanded(child: Text('Правила сервиса', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Text(
+            '1. Бонусная система\n'
+            '1 бонус = 1 манат. Бонусами можно оплатить до 30% от стоимости услуг. Бонусы нельзя обменять на наличные.\n\n'
+            '2. Сроки и диагностика\n'
+            'Диагностика проводится бесплатно при согласии на ремонт. Сроки ремонта зависят от сложности и наличия деталей.\n\n'
+            '3. Гарантия\n'
+            'Мы предоставляем гарантию на выполненные работы и установленные запчасти. Точный срок гарантии указывается в квитанции.',
+            style: TextStyle(fontSize: 14, height: 1.5, color: Colors.black87),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Понятно', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- ВИДЖЕТ PUNCH-КАРТЫ ---
+  Widget _buildPunchCard(int refills) {
+    int progress = refills % 5;
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.print, color: Colors.blueGrey),
+                SizedBox(width: 8),
+                Text('Заправка картриджей', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text('Каждая 5-я заправка — БЕСПЛАТНО!', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(5, (index) {
+                bool isFilled = index < progress;
+                bool isLast = index == 4;
+                return Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isFilled ? Colors.orange : Colors.grey[100],
+                    shape: BoxShape.circle,
+                    border: isLast ? Border.all(color: Colors.orange, width: 2) : null,
+                  ),
+                  child: Center(
+                    child: isLast 
+                        ? Icon(Icons.card_giftcard, color: isFilled ? Colors.white : Colors.orange, size: 20)
+                        : Icon(Icons.check, color: isFilled ? Colors.white : Colors.transparent, size: 20),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 12),
+            Text('Заправлено: $refills шт.', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildMenuCard({required String title, required String subtitle, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
@@ -259,10 +416,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       stream: FirebaseFirestore.instance.collection('clients').doc(widget.phone).snapshots(),
       builder: (context, snapshot) {
         int points = 0;
+        int cartridgeRefills = 0;
+        String? gender;
+        String? birthDate;
 
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           points = data['bonus_points'] as int? ?? 0;
+          cartridgeRefills = data['cartridge_refills'] as int? ?? 0; // Для Punch-карты
+          gender = data['gender'] as String?;
+          birthDate = data['birth_date'] as String?;
         }
 
         return SingleChildScrollView(
@@ -270,7 +433,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Карточка баланса
+              // КАРТОЧКА БАЛАНСА БОНУСОВ
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -289,9 +452,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    const Text('Ваш баланс баллов:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    const Text('Ваш баланс бонусов:', style: TextStyle(color: Colors.white70, fontSize: 13)),
                     const SizedBox(height: 4),
-                    Text('$points баллов', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+                    Text('$points бонусов', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -299,7 +462,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Text('Скидка до ${widget.maxDiscountPercent}%.', style: const TextStyle(color: Colors.white54, fontSize: 11)),
                         Row(
                           children: [
-                            // КНОПКА ПОДЕЛИТЬСЯ БАЛЛАМИ
                             GestureDetector(
                               onTap: () => _showTransferDialog(points),
                               child: Container(
@@ -315,7 +477,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                             ),
-                            // КНОПКА ИСТОРИИ
                             GestureDetector(
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BonusHistoryScreen(phone: widget.phone))),
                               child: Container(
@@ -338,7 +499,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
 
-              // БЛОК ОЖИДАЮЩИХ ПЕРЕВОДОВ (Замороженные баллы)
+              // PUNCH-КАРТА (ГЕЙМИФИКАЦИЯ)
+              _buildPunchCard(cartridgeRefills),
+              const SizedBox(height: 16),
+
+              // БЛОК ОЖИДАЮЩИХ ПЕРЕВОДОВ (Замороженные бонусы)
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('bonus_transactions')
                     .where('sender_phone', isEqualTo: widget.phone)
@@ -350,7 +515,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Баллы в пути (Ждут регистрации друга):', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12)),
+                      const Text('Бонусы в пути (Ждут регистрации друга):', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12)),
                       const SizedBox(height: 8),
                       ...pendingSnapshot.data!.docs.map((doc) {
                         final data = doc.data() as Map<String, dynamic>;
@@ -368,7 +533,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Text('Для ${data['recipient_phone']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                 ],
                               ),
-                              Text('${data['amount']} баллов', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 14)),
+                              Text('${data['amount']} бонусов', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 14)),
                             ],
                           ),
                         );
@@ -378,6 +543,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   );
                 },
               ),
+
+              const Text('ЛИЧНЫЕ ДАННЫЕ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+              const SizedBox(height: 12),
+              
+              // РАСШИРЕННЫЙ ПРОФИЛЬ
+              if (gender == null || birthDate == null)
+                Card(
+                  color: Colors.orange[50],
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange[200]!)),
+                  child: ListTile(
+                    leading: const Icon(Icons.person_add_alt_1, color: Colors.orange),
+                    title: const Text('Заполнить профиль', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                    subtitle: const Text('Укажите ДР для получения подарков', style: TextStyle(fontSize: 12)),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.orange),
+                    onTap: _showProfileForm,
+                  ),
+                )
+              else
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.person, color: Colors.blueGrey, size: 20),
+                            const SizedBox(width: 12),
+                            Text('Пол: $gender', style: const TextStyle(fontSize: 15)),
+                            const Spacer(),
+                            const Icon(Icons.lock, size: 16, color: Colors.grey), // Замочек (защита от смены)
+                          ],
+                        ),
+                        const Divider(height: 24),
+                        Row(
+                          children: [
+                            const Icon(Icons.cake, color: Colors.blueGrey, size: 20),
+                            const SizedBox(width: 12),
+                            Text('Дата рождения: $birthDate', style: const TextStyle(fontSize: 15)),
+                            const Spacer(),
+                            const Icon(Icons.lock, size: 16, color: Colors.grey), // Замочек
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
 
               const Text('МОЙ АККАУНТ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
               const SizedBox(height: 12),
@@ -392,10 +607,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               _buildMenuCard(title: 'Служба поддержки', subtitle: 'Связь с администратором', icon: Icons.headset_mic, iconColor: Colors.teal[700]!, onTap: _callAdmin),
+              const SizedBox(height: 8),
               
-              // КНОПКА ВЫХОДА
+              // КНОПКА ПРАВИЛ И ЦЕН
+              _buildMenuCard(title: 'Актуальность цен и правила', subtitle: 'Условия работы и гарантии', icon: Icons.gavel, iconColor: Colors.purple[700]!, onTap: _showRulesDialog),
+              
               const SizedBox(height: 32),
               Center(
                 child: TextButton.icon(
