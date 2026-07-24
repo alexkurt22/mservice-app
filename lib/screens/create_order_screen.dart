@@ -12,7 +12,7 @@ class CreateOrderScreen extends StatefulWidget {
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _problemController = TextEditingController();
   
-  // --- ДИНАМИЧЕСКИЕ КАТЕГОРИИ (СУПЕР-ПРИЛОЖЕНИЕ) ---
+  // --- ДИНАМИЧЕСКИЕ КАТЕГОРИИ ---
   Map<String, List<String>> _categoriesMap = {}; 
   String? _selectedDirection; 
   String? _selectedSubCategory; 
@@ -35,7 +35,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     _loadCategories(); 
   }
 
-  // Скачиваем структуру из базы (ту самую, что мы создаем в админке)
+  // Скачиваем структуру из базы
   Future<void> _loadCategories() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('settings').doc('categories_v2').get();
@@ -95,10 +95,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       await FirebaseFirestore.instance.collection('orders').add({
         'client_name': clientName,
         'phone': phone,
-        'category': _selectedDirection, // Глобальное направление
-        'device_type': _selectedSubCategory, // Конкретная услуга
+        'category': _selectedDirection, 
+        'device_type': _selectedSubCategory, 
         'problem': _problemController.text.trim(),
-        'payment_method': _selectedPaymentMethod, // 🔥 СОХРАНЯЕМ СПОСОБ ОПЛАТЫ
+        'payment_method': _selectedPaymentMethod, // Сохраняем способ оплаты
         'status': 'new',
         'created_at': FieldValue.serverTimestamp(),
         'has_unread_update': false,
@@ -131,134 +131,155 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     super.dispose();
   }
 
+  // --- ВСПОМОГАТЕЛЬНЫЙ ВИДЖЕТ ДЛЯ ИКОНОК ОПЛАТЫ ---
+  IconData _getPaymentIcon(String method) {
+    if (method.contains('карта')) return Icons.credit_card;
+    if (method.contains('Перечисление')) return Icons.account_balance;
+    if (method.contains('бонус')) return Icons.stars_rounded;
+    return Icons.payments; // Наличные по умолчанию
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.grey[100], // Более светлый фон для контраста
       appBar: AppBar(
-        title: const Text('Новый заказ'),
+        title: const Text('Новый заказ', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.blueGrey[900],
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: _isLoadingCategories
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Направление',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedDirection,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.blueGrey[800]!, width: 2)),
-                    ),
-                    hint: const Text('Выберите сферу услуг'),
-                    items: _categoriesMap.keys
-                        .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        _selectedDirection = val;
-                        _selectedSubCategory = null; // Сбрасываем подкатегорию
-                      });
-                    },
-                  ),
                   
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Услуга / Устройство',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedSubCategory,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: _selectedDirection == null ? Colors.grey[200] : Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.blueGrey[800]!, width: 2)),
-                    ),
-                    hint: const Text('Сначала выберите направление'),
-                    items: (_selectedDirection != null ? _categoriesMap[_selectedDirection]! : <String>[])
-                        .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
-                        .toList(),
-                    onChanged: _selectedDirection == null ? null : (val) => setState(() => _selectedSubCategory = val),
-                  ),
-
-                  // 🔥 НОВЫЙ БЛОК: СПОСОБ ОПЛАТЫ 🔥
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Способ оплаты',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedPaymentMethod,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.blueGrey[800]!, width: 2)),
-                      prefixIcon: const Icon(Icons.payment, color: Colors.blueGrey),
-                    ),
-                    items: _paymentMethods
-                        .map<DropdownMenuItem<String>>((String method) => DropdownMenuItem<String>(value: method, child: Text(method)))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _selectedPaymentMethod = val);
-                      }
-                    },
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Дополнительно',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _problemController,
-                    maxLines: 6, 
-                    decoration: InputDecoration(
-                      hintText: 'Опишите проблему или что нужно сделать...', 
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: Colors.blueGrey[800]!, width: 2),
+                  // --- БЛОК 1: ЧТО НУЖНО ПОЧИНИТЬ ---
+                  const Text('ЧТО НУЖНО СДЕЛАТЬ?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade300)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          DropdownButtonFormField<String>(
+                            value: _selectedDirection,
+                            icon: const Icon(Icons.expand_more, color: Colors.blueGrey),
+                            decoration: InputDecoration(
+                              labelText: 'Направление',
+                              prefixIcon: const Icon(Icons.category, color: Colors.blueGrey),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                            ),
+                            hint: const Text('Выберите сферу услуг'),
+                            items: _categoriesMap.keys
+                                .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
+                                .toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedDirection = val;
+                                _selectedSubCategory = null; // Сбрасываем подкатегорию
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            value: _selectedSubCategory,
+                            icon: const Icon(Icons.expand_more, color: Colors.blueGrey),
+                            decoration: InputDecoration(
+                              labelText: 'Услуга / Устройство',
+                              prefixIcon: const Icon(Icons.devices, color: Colors.blueGrey),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                              filled: true,
+                              fillColor: _selectedDirection == null ? Colors.grey[200] : Colors.grey[50],
+                            ),
+                            hint: const Text('Сначала выберите направление'),
+                            items: (_selectedDirection != null ? _categoriesMap[_selectedDirection]! : <String>[])
+                                .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
+                                .toList(),
+                            onChanged: _selectedDirection == null ? null : (val) => setState(() => _selectedSubCategory = val),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
+
+                  // --- БЛОК 2: ОПИСАНИЕ ПРОБЛЕМЫ ---
+                  const SizedBox(height: 24),
+                  const Text('ОПИСАНИЕ ПРОБЛЕМЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade300)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: TextField(
+                        controller: _problemController,
+                        maxLines: 4, 
+                        decoration: InputDecoration(
+                          hintText: 'Опишите проблему или что нужно сделать...\nНапример: Не включается экран, нужно заменить стекло.', 
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.all(16),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // --- БЛОК 3: СПОСОБ ОПЛАТЫ (НОВЫЙ UI) ---
+                  const SizedBox(height: 24),
+                  const Text('СПОСОБ ОПЛАТЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8.0,
+                    runSpacing: 8.0,
+                    children: _paymentMethods.map((method) {
+                      final isSelected = _selectedPaymentMethod == method;
+                      return ChoiceChip(
+                        label: Text(method),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) setState(() => _selectedPaymentMethod = method);
+                        },
+                        avatar: Icon(_getPaymentIcon(method), color: isSelected ? Colors.white : Colors.blueGrey, size: 18),
+                        selectedColor: Colors.blueGrey[900],
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? Colors.blueGrey[900]! : Colors.grey.shade300)),
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      );
+                    }).toList(),
+                  ),
+                  
+                  const SizedBox(height: 40),
+                  
+                  // --- КНОПКА ОТПРАВКИ ---
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange[600],
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 4,
                     ),
                     onPressed: _isLoading ? null : _submitOrder,
                     child: _isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('ОТПРАВИТЬ ЗАЯВКУ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                        ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                        : const Text('ОТПРАВИТЬ ЗАЯВКУ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                   ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
     );
   }
 }
+
