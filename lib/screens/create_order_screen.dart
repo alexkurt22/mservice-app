@@ -141,13 +141,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100], 
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor, 
       appBar: AppBar(
         title: const Text('Новый заказ', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blueGrey[900],
-        foregroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: Theme.of(context).cardColor,
+        foregroundColor: isDark ? Colors.white : Colors.black87,
+        elevation: 1,
       ),
       body: _isLoadingCategories
           ? const Center(child: CircularProgressIndicator())
@@ -158,27 +160,30 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 children: [
                   
                   // --- БЛОК 1: ЧТО НУЖНО ПОЧИНИТЬ ---
-                  const Text('ЧТО НУЖНО СДЕЛАТЬ?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+                  Text('ЧТО НУЖНО СДЕЛАТЬ?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
                   const SizedBox(height: 12),
                   Card(
                     elevation: 0,
-                    // ИСПРАВЛЕНИЕ 1: side: BorderSide вместо border: Border.all
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade300)),
+                    color: Theme.of(context).cardColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade300)),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         children: [
                           DropdownButtonFormField<String>(
                             value: _selectedDirection,
-                            icon: const Icon(Icons.expand_more, color: Colors.blueGrey),
+                            dropdownColor: Theme.of(context).cardColor,
+                            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                            icon: Icon(Icons.expand_more, color: isDark ? Colors.white54 : Colors.blueGrey),
                             decoration: InputDecoration(
                               labelText: 'Направление',
-                              prefixIcon: const Icon(Icons.category, color: Colors.blueGrey),
+                              labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[700]),
+                              prefixIcon: Icon(Icons.category, color: isDark ? Colors.white54 : Colors.blueGrey),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                               filled: true,
-                              fillColor: Colors.grey[50],
+                              fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
                             ),
-                            hint: const Text('Выберите сферу услуг'),
+                            hint: Text('Выберите сферу услуг', style: TextStyle(color: isDark ? Colors.white24 : Colors.grey)),
                             items: _categoriesMap.keys
                                 .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
                                 .toList(),
@@ -192,15 +197,20 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
                             value: _selectedSubCategory,
-                            icon: const Icon(Icons.expand_more, color: Colors.blueGrey),
+                            dropdownColor: Theme.of(context).cardColor,
+                            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                            icon: Icon(Icons.expand_more, color: isDark ? Colors.white54 : Colors.blueGrey),
                             decoration: InputDecoration(
                               labelText: 'Услуга / Устройство',
-                              prefixIcon: const Icon(Icons.devices, color: Colors.blueGrey),
+                              labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[700]),
+                              prefixIcon: Icon(Icons.devices, color: isDark ? Colors.white54 : Colors.blueGrey),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                               filled: true,
-                              fillColor: _selectedDirection == null ? Colors.grey[200] : Colors.grey[50],
+                              fillColor: _selectedDirection == null 
+                                  ? (isDark ? Colors.grey[900] : Colors.grey[200]) 
+                                  : (isDark ? Colors.grey[800] : Colors.grey[50]),
                             ),
-                            hint: const Text('Сначала выберите направление'),
+                            hint: Text('Сначала выберите направление', style: TextStyle(color: isDark ? Colors.white24 : Colors.grey)),
                             items: (_selectedDirection != null ? _categoriesMap[_selectedDirection]! : <String>[])
                                 .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
                                 .toList(),
@@ -213,23 +223,24 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
                   // --- БЛОК 2: ОПИСАНИЕ ПРОБЛЕМЫ ---
                   const SizedBox(height: 24),
-                  const Text('ОПИСАНИЕ ПРОБЛЕМЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+                  Text('ОПИСАНИЕ ПРОБЛЕМЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
                   const SizedBox(height: 12),
                   Card(
                     elevation: 0,
-                    // ИСПРАВЛЕНИЕ 2: side: BorderSide вместо border: Border.all
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade300)),
+                    color: Theme.of(context).cardColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade300)),
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: TextField(
                         controller: _problemController,
                         maxLines: 4, 
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                         decoration: InputDecoration(
                           hintText: 'Опишите проблему или что нужно сделать...\nНапример: Не включается экран, нужно заменить стекло.', 
-                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey[400]),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: Theme.of(context).cardColor,
                           contentPadding: const EdgeInsets.all(16),
                         ),
                       ),
@@ -238,7 +249,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
                   // --- БЛОК 3: СПОСОБ ОПЛАТЫ ---
                   const SizedBox(height: 24),
-                  const Text('СПОСОБ ОПЛАТЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.2)),
+                  Text('СПОСОБ ОПЛАТЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8.0,
@@ -251,12 +262,19 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         onSelected: (selected) {
                           if (selected) setState(() => _selectedPaymentMethod = method);
                         },
-                        avatar: Icon(_getPaymentIcon(method), color: isSelected ? Colors.white : Colors.blueGrey, size: 18),
-                        selectedColor: Colors.blueGrey[900],
-                        backgroundColor: Colors.white,
-                        // ИСПРАВЛЕНИЕ 3: side: BorderSide вместо border: Border.all
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isSelected ? Colors.blueGrey[900]! : Colors.grey.shade300)),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                        avatar: Icon(_getPaymentIcon(method), color: isSelected ? Colors.white : (isDark ? Colors.white54 : Colors.blueGrey), size: 18),
+                        selectedColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900],
+                        backgroundColor: Theme.of(context).cardColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12), 
+                          side: BorderSide(color: isSelected 
+                              ? (isDark ? Colors.blueGrey[700]! : Colors.blueGrey[900]!) 
+                              : (isDark ? Colors.grey[800]! : Colors.grey.shade300))
+                        ),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87), 
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+                        ),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       );
                     }).toList(),
@@ -285,3 +303,4 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 }
+
