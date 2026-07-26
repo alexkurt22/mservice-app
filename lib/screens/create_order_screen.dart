@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:convert'; // Для кодирования в Base64
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:record/record.dart';
 import 'support_chat_screen.dart';
 
@@ -17,7 +17,7 @@ class CreateOrderScreen extends StatefulWidget {
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _problemController = TextEditingController();
   
-  // --- ТИПЫ ТЕХНИКИ И НАПРАВЛЕНИЯ БИЗНЕСА (Без телефонов!) ---
+  // --- ТИПЫ ТЕХНИКИ И НАПРАВЛЕНИЯ БИЗНЕСА (БЕЗ ТЕЛЕФОНОВ!) ---
   final List<Map<String, dynamic>> _deviceTypes = [
     {'name': 'Компьютеры / ИТ', 'icon': Icons.computer},
     {'name': 'Автосервис', 'icon': Icons.directions_car},
@@ -37,7 +37,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   
   bool _isLoading = false; 
 
-  // --- МЕДИА ФАЙЛЫ (Фото и Аудио) ---
+  // --- МЕДИА ФАЙЛЫ ---
   File? _attachedImage;
   String? _attachedAudioPath;
   bool _isRecording = false;
@@ -51,10 +51,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     super.dispose();
   }
 
-  // --- ЛОГИКА ФОТО ---
+  // --- ЛОГИКА ФОТО (С СИЛЬНЫМ СЖАТИЕМ ДЛЯ БАЗЫ) ---
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final pickedFile = await _imagePicker.pickImage(source: source, imageQuality: 70);
+      // Сжимаем фото до ~50-100 КБ, чтобы легко поместилось в бесплатный Firestore
+      final pickedFile = await _imagePicker.pickImage(
+        source: source, 
+        imageQuality: 40, 
+        maxWidth: 800
+      );
       if (pickedFile != null) {
         setState(() => _attachedImage = File(pickedFile.path));
       }
@@ -92,7 +97,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // --- ЛОГИКА АУДИО ---
+  // --- ЛОГИКА АУДИО (ЭКОНОМНЫЙ БИТРЕЙТ) ---
   Future<void> _toggleRecording() async {
     try {
       if (_isRecording) {
@@ -103,7 +108,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         });
       } else {
         if (await _audioRecorder.hasPermission()) {
-          // Удаляем старое аудио, если начинаем новую запись
           if (_attachedAudioPath != null) {
             final oldFile = File(_attachedAudioPath!);
             if (oldFile.existsSync()) oldFile.deleteSync();
@@ -112,7 +116,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           final tempDir = Directory.systemTemp.path;
           final audioPath = '$tempDir/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
           
-          await _audioRecorder.start(const RecordConfig(), path: audioPath);
+          // Пишем с низким битрейтом (64 kbps), чтобы размер файла был крошечным
+          await _audioRecorder.start(
+            const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000), 
+            path: audioPath
+          );
+          
           setState(() {
             _isRecording = true;
             _attachedAudioPath = null;
@@ -126,7 +135,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
-  // --- ОТПРАВКА ЗАКАЗА В БАЗУ ---
+  // --- ХИТРАЯ ОТПРАВКА БЕЗ КАРТЫ (КОНВЕРТАЦИЯ В BASE64) ---
   Future<void> _submitOrder() async {
     if (_problemController.text.trim().isEmpty && _attachedImage == null && _attachedAudioPath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -142,25 +151,23 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final phone = prefs.getString('phone') ?? 'Неизвестный номер';
       final clientName = prefs.getString('client_name') ?? 'Неизвестный пользователь';
 
-      String? imageUrl;
-      String? audioUrl;
+      String? imageBase64;
+      String? audioBase64;
 
-      // 1. Загружаем фото в Firebase Storage (если есть)
+      // Превращаем картинку в текст
       if (_attachedImage != null) {
-        final imgRef = FirebaseStorage.instance.ref().child('orders_media/images/${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await imgRef.putFile(_attachedImage!);
-        imageUrl = await imgRef.getDownloadURL();
+        final bytes = await _attachedImage!.readAsBytes();
+        imageBase64 = base64Encode(bytes);
       }
 
-      // 2. Загружаем аудио в Firebase Storage (если есть)
+      // Превращаем аудио в текст
       if (_attachedAudioPath != null) {
         final audioFile = File(_attachedAudioPath!);
-        final audioRef = FirebaseStorage.instance.ref().child('orders_media/audios/${DateTime.now().millisecondsSinceEpoch}.m4a');
-        await audioRef.putFile(audioFile);
-        audioUrl = await audioRef.getDownloadURL();
+        final bytes = await audioFile.readAsBytes();
+        audioBase64 = base64Encode(bytes);
       }
 
-      // 3. Создаем документ заказа
+      // Сохраняем текстовый код прямо в базу
       await FirebaseFirestore.instance.collection('orders').add({
         'client_name': clientName,
         'phone': phone,
@@ -168,8 +175,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         'device_type': _selectedDeviceType, 
         'problem': _problemController.text.trim(),
         'payment_method': _selectedPaymentMethod,
-        'attached_image': imageUrl, // Ссылка на фото
-        'attached_audio': audioUrl, // Ссылка на аудио
+        'image_base64': imageBase64, // Текст вместо файла!
+        'audio_base64': audioBase64, // Текст вместо файла!
         'status': 'new',
         'created_at': FieldValue.serverTimestamp(),
         'has_unread_update': false,
@@ -219,7 +226,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             ],
           ),
           content: Text(
-            'Для оплаты перечислением вам требуется предварительно связаться с администрацией.',
+            'Для оплаты перечислением вам требуется предварительно связаться с администрацией.\n\nОбратите внимание: цены могут отличаться, и мы работаем по предоплате.',
             style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, height: 1.5, fontSize: 15),
           ),
           actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -336,7 +343,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       maxLines: 4, 
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                       decoration: InputDecoration(
-                        hintText: 'Что случилось?\nНапример: Не включается, нужна сборка шкафа или ремонт генератора.', 
+                        hintText: 'Что случилось?\nНапример: Не включается ноутбук, нужна сборка шкафа или ремонт генератора.', 
                         hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey[400]),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                         filled: true, fillColor: Theme.of(context).cardColor,
