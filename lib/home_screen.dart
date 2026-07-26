@@ -12,21 +12,11 @@ import '../login_screen.dart';
 import 'support_chat_screen.dart';
 import 'services_catalog_screen.dart';
 import 'profile_screen.dart';
+import 'notifications_screen.dart';
+
 
 const String CURRENT_APP_VERSION = "1.0.0";
 
-// --- Заглушка для экрана уведомлений (потом вынесем в отдельный файл) ---
-class NotificationsScreen extends StatelessWidget {
-  const NotificationsScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Уведомления')),
-      body: const Center(child: Text('Здесь будет история уведомлений')),
-    );
-  }
-}
-// ------------------------------------------------------------------------
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
