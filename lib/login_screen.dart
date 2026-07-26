@@ -155,7 +155,8 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
 
-        int welcomeBonus = 10;
+        // --- УМНЫЙ (КОНТРОЛИРУЕМЫЙ ИЗ АДМИНКИ) БОНУС ЗА РЕГИСТРАЦИЮ ---
+        int welcomeBonus = 0; // По умолчанию отключен (0)
         try {
           final loyaltyDoc = await FirebaseFirestore.instance
               .collection('settings')
@@ -164,7 +165,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
           if (loyaltyDoc.exists && loyaltyDoc.data() != null) {
             final data = loyaltyDoc.data()!;
-            if (data.containsKey('welcome_points')) {
+            final isEnabled = data['is_welcome_bonus_enabled'] ?? false; // Проверяем тумблер
+            
+            if (isEnabled && data.containsKey('welcome_points')) {
               welcomeBonus = (data['welcome_points'] as num).toInt();
             }
           }
@@ -189,6 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
           'bonus_points': welcomeBonus,
         });
 
+        // Записываем историю бонусов ТОЛЬКО если бонус > 0
         if (welcomeBonus > 0) {
           final historyRef = newClientRef.collection('bonus_history').doc();
           batch.set(historyRef, {
@@ -318,12 +322,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       await _capturePendingBonuses(_currentCheckingPhone!);
 
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Вам начислено $userPoints приветственных бонусов 🎁'),
-                          backgroundColor: Colors.green[700],
-                          behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 4),
-                        ));
+                        if (userPoints > 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Вам начислено $userPoints приветственных бонусов 🎁'),
+                            backgroundColor: Colors.green[700],
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 4),
+                          ));
+                        }
                         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
                       }
                     },
@@ -465,7 +471,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 48),
 
                       if (!_isLogin) ...[
-                        // ИСПРАВЛЕНО: TextInputType.text принудительно открывает буквы
                         _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.text, isDark: isDark),
                         const SizedBox(height: 16),
                       ],
@@ -539,7 +544,6 @@ class _LoginScreenState extends State<LoginScreen> {
       keyboardType: keyboardType,
       obscureText: obscureText,
       maxLength: maxLength,
-      // ИСПРАВЛЕНО: Автоматически делаем первую букву заглавной для текста
       textCapitalization: (keyboardType == TextInputType.name || keyboardType == TextInputType.text) ? TextCapitalization.words : TextCapitalization.none,
       inputFormatters: keyboardType == TextInputType.phone ? [FilteringTextInputFormatter.digitsOnly] : null,
       style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
@@ -561,4 +565,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
