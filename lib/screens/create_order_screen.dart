@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'support_chat_screen.dart'; // Подключаем чат для перехода
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:record/record.dart';
+import 'support_chat_screen.dart';
 
 class CreateOrderScreen extends StatefulWidget {
   const CreateOrderScreen({super.key});
@@ -13,7 +17,7 @@ class CreateOrderScreen extends StatefulWidget {
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _problemController = TextEditingController();
   
-  // --- ТИПЫ ТЕХНИКИ И НАПРАВЛЕНИЯ БИЗНЕСА ---
+  // --- ТИПЫ ТЕХНИКИ И НАПРАВЛЕНИЯ БИЗНЕСА (Без телефонов!) ---
   final List<Map<String, dynamic>> _deviceTypes = [
     {'name': 'Компьютеры / ИТ', 'icon': Icons.computer},
     {'name': 'Автосервис', 'icon': Icons.directions_car},
@@ -33,10 +37,100 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   
   bool _isLoading = false; 
 
+  // --- МЕДИА ФАЙЛЫ (Фото и Аудио) ---
+  File? _attachedImage;
+  String? _attachedAudioPath;
+  bool _isRecording = false;
+  final _audioRecorder = AudioRecorder();
+  final ImagePicker _imagePicker = ImagePicker();
+
+  @override
+  void dispose() {
+    _problemController.dispose();
+    _audioRecorder.dispose();
+    super.dispose();
+  }
+
+  // --- ЛОГИКА ФОТО ---
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(source: source, imageQuality: 70);
+      if (pickedFile != null) {
+        setState(() => _attachedImage = File(pickedFile.path));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка фото: $e')));
+    }
+  }
+
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              title: const Text('Сделать фото'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.orange),
+              title: const Text('Выбрать из галереи'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- ЛОГИКА АУДИО ---
+  Future<void> _toggleRecording() async {
+    try {
+      if (_isRecording) {
+        final path = await _audioRecorder.stop();
+        setState(() {
+          _isRecording = false;
+          _attachedAudioPath = path;
+        });
+      } else {
+        if (await _audioRecorder.hasPermission()) {
+          // Удаляем старое аудио, если начинаем новую запись
+          if (_attachedAudioPath != null) {
+            final oldFile = File(_attachedAudioPath!);
+            if (oldFile.existsSync()) oldFile.deleteSync();
+          }
+
+          final tempDir = Directory.systemTemp.path;
+          final audioPath = '$tempDir/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          
+          await _audioRecorder.start(const RecordConfig(), path: audioPath);
+          setState(() {
+            _isRecording = true;
+            _attachedAudioPath = null;
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет разрешения на микрофон!')));
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка аудио: $e')));
+    }
+  }
+
+  // --- ОТПРАВКА ЗАКАЗА В БАЗУ ---
   Future<void> _submitOrder() async {
-    if (_problemController.text.trim().isEmpty) {
+    if (_problemController.text.trim().isEmpty && _attachedImage == null && _attachedAudioPath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пожалуйста, опишите проблему'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Пожалуйста, опишите проблему (текстом, фото или голосовым)'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -48,6 +142,25 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final phone = prefs.getString('phone') ?? 'Неизвестный номер';
       final clientName = prefs.getString('client_name') ?? 'Неизвестный пользователь';
 
+      String? imageUrl;
+      String? audioUrl;
+
+      // 1. Загружаем фото в Firebase Storage (если есть)
+      if (_attachedImage != null) {
+        final imgRef = FirebaseStorage.instance.ref().child('orders_media/images/${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await imgRef.putFile(_attachedImage!);
+        imageUrl = await imgRef.getDownloadURL();
+      }
+
+      // 2. Загружаем аудио в Firebase Storage (если есть)
+      if (_attachedAudioPath != null) {
+        final audioFile = File(_attachedAudioPath!);
+        final audioRef = FirebaseStorage.instance.ref().child('orders_media/audios/${DateTime.now().millisecondsSinceEpoch}.m4a');
+        await audioRef.putFile(audioFile);
+        audioUrl = await audioRef.getDownloadURL();
+      }
+
+      // 3. Создаем документ заказа
       await FirebaseFirestore.instance.collection('orders').add({
         'client_name': clientName,
         'phone': phone,
@@ -55,6 +168,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         'device_type': _selectedDeviceType, 
         'problem': _problemController.text.trim(),
         'payment_method': _selectedPaymentMethod,
+        'attached_image': imageUrl, // Ссылка на фото
+        'attached_audio': audioUrl, // Ссылка на аудио
         'status': 'new',
         'created_at': FieldValue.serverTimestamp(),
         'has_unread_update': false,
@@ -72,19 +187,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка отправки: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка отправки: $e'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _problemController.dispose();
-    super.dispose();
   }
 
   IconData _getPaymentIcon(String method) {
@@ -94,7 +201,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     return Icons.payments; 
   }
 
-  // --- ЛОГИКА ВЫБОРА ОПЛАТЫ И КРАСИВОГО ДИАЛОГА ---
   void _onPaymentMethodSelected(String method) {
     if (method == 'Перечисление') {
       final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -108,10 +214,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               const Icon(Icons.info_outline, color: Colors.orange, size: 28),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Оплата перечислением', 
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
-                )
+                child: Text('Оплата перечислением', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))
               ),
             ],
           ),
@@ -148,16 +251,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     } else {
       setState(() => _selectedPaymentMethod = method);
     }
-  }
-
-  void _showMediaPlaceholder(String type) {
-    ScaffoldMessenger.of(context).showSnackBar(
-       SnackBar(
-        content: Text('Подключаем $type в следующем шаге! 🚀'),
-        backgroundColor: Colors.blueGrey,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   @override
@@ -207,11 +300,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            device['icon'], 
-                            size: 32, 
-                            color: isSelected ? Colors.blue : (isDark ? Colors.white54 : Colors.blueGrey)
-                          ),
+                          Icon(device['icon'], size: 32, color: isSelected ? Colors.blue : (isDark ? Colors.white54 : Colors.blueGrey)),
                           const SizedBox(height: 8),
                           Text(
                             device['name'],
@@ -247,40 +336,80 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       maxLines: 4, 
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                       decoration: InputDecoration(
-                        hintText: 'Что случилось?\nНапример: Не включается ноутбук, нужна сборка шкафа или ремонт генератора.', 
+                        hintText: 'Что случилось?\nНапример: Не включается, нужна сборка шкафа или ремонт генератора.', 
                         hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey[400]),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                        filled: true,
-                        fillColor: Theme.of(context).cardColor,
+                        filled: true, fillColor: Theme.of(context).cardColor,
                         contentPadding: const EdgeInsets.all(16),
                       ),
                     ),
                   ),
+
+                  // ИНДИКАТОРЫ ПРИКРЕПЛЕННЫХ ФАЙЛОВ
+                  if (_attachedImage != null || _attachedAudioPath != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Column(
+                        children: [
+                          if (_attachedImage != null)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(_attachedImage!, width: 40, height: 40, fit: BoxFit.cover),
+                              ),
+                              title: const Text('Фото прикреплено', style: TextStyle(fontSize: 14)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.close, color: Colors.red),
+                                onPressed: () => setState(() => _attachedImage = null),
+                              ),
+                            ),
+                          if (_attachedAudioPath != null)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const CircleAvatar(backgroundColor: Colors.orange, child: Icon(Icons.audiotrack, color: Colors.white, size: 20)),
+                              title: const Text('Голосовое сообщение', style: TextStyle(fontSize: 14)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.close, color: Colors.red),
+                                onPressed: () {
+                                  final f = File(_attachedAudioPath!);
+                                  if (f.existsSync()) f.deleteSync();
+                                  setState(() => _attachedAudioPath = null);
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                  // ПАНЕЛЬ КНОПОК
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade200))
-                    ),
+                    decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade200))),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Лень писать?', style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[600], fontSize: 13)),
+                        Text(_isRecording ? 'Идёт запись...' : 'Лень писать?', 
+                          style: TextStyle(color: _isRecording ? Colors.red : (isDark ? Colors.white54 : Colors.grey[600]), fontSize: 13, fontWeight: _isRecording ? FontWeight.bold : FontWeight.normal)),
                         Row(
                           children: [
                             IconButton(
                               icon: Icon(Icons.attach_file, color: isDark ? Colors.blueGrey[400] : Colors.blueGrey),
-                              tooltip: 'Прикрепить фото',
-                              onPressed: () => _showMediaPlaceholder('фото'),
+                              onPressed: _isRecording ? null : _showImageSourceDialog,
                             ),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: isDark ? Colors.orange[900]?.withOpacity(0.3) : Colors.orange[50],
-                                shape: BoxShape.circle,
-                              ),
-                              child: IconButton(
-                                icon: Icon(Icons.mic, color: Colors.orange[700]),
-                                tooltip: 'Записать голосовое',
-                                onPressed: () => _showMediaPlaceholder('голосовое'),
+                            GestureDetector(
+                              onTap: _toggleRecording,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _isRecording ? Colors.red : (isDark ? Colors.orange[900]?.withOpacity(0.3) : Colors.orange[50]),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _isRecording ? Icons.stop : Icons.mic, 
+                                  color: _isRecording ? Colors.white : Colors.orange[700]
+                                ),
                               ),
                             ),
                           ],
@@ -312,14 +441,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   backgroundColor: Theme.of(context).cardColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12), 
-                    side: BorderSide(color: isSelected 
-                        ? (isDark ? Colors.blueGrey[700]! : Colors.blueGrey[900]!) 
-                        : (isDark ? Colors.grey[800]! : Colors.grey.shade300))
+                    side: BorderSide(color: isSelected ? (isDark ? Colors.blueGrey[700]! : Colors.blueGrey[900]!) : (isDark ? Colors.grey[800]! : Colors.grey.shade300))
                   ),
-                  labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87), 
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
-                  ),
+                  labelStyle: TextStyle(color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87), fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 );
               }).toList(),
@@ -348,3 +472,4 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 }
+
