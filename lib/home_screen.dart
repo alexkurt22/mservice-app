@@ -6,14 +6,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'screens/my_orders_screen.dart';
-import 'screens/create_order_screen.dart';
-import 'login_screen.dart';
-import 'screens/support_chat_screen.dart';
-import 'screens/services_catalog_screen.dart';
-import 'screens/profile_screen.dart'; 
+import 'my_orders_screen.dart';
+import 'create_order_screen.dart';
+import '../login_screen.dart';
+import 'support_chat_screen.dart';
+import 'services_catalog_screen.dart';
+import 'profile_screen.dart';
 
-const String CURRENT_APP_VERSION = "1.0.0"; 
+const String CURRENT_APP_VERSION = "1.0.0";
+
+// --- Заглушка для экрана уведомлений (потом вынесем в отдельный файл) ---
+class NotificationsScreen extends StatelessWidget {
+  const NotificationsScreen({Key? key}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Уведомления')),
+      body: const Center(child: Text('Здесь будет история уведомлений')),
+    );
+  }
+}
+// ------------------------------------------------------------------------
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -23,19 +36,19 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0; 
+  int _currentIndex = 0;
   String? _phone;
   String? _clientName;
   bool _isLoading = true;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
-  int _maxDiscountPercentUI = 30; 
+  int _maxDiscountPercentUI = 30;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
     _checkForUpdates();
-    _fetchLoyaltyConfig(); 
+    _fetchLoyaltyConfig();
   }
 
   @override
@@ -120,8 +133,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_phone != null) {
       _setupPushNotifications();
-      _listenToBanHammer(); 
-      _checkAndInitClientDoc(); 
+      _listenToBanHammer();
+      _checkAndInitClientDoc();
     }
   }
 
@@ -129,12 +142,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_phone == null) return;
     final docRef = FirebaseFirestore.instance.collection('clients').doc(_phone);
     final doc = await docRef.get();
-    
+
     if (!doc.exists) {
-      int welcomePoints = 10;
+      int welcomePoints = 0; // ИСПРАВЛЕНО: По умолчанию 0, управляется из Админки
       try {
         final settings = await FirebaseFirestore.instance.collection('settings').doc('loyalty').get();
-        if (settings.exists && settings.data()!.containsKey('welcome_points')) {
+        if (settings.exists && settings.data()!.containsKey('welcome_points') && settings.data()!['is_welcome_bonus_enabled'] == true) {
           welcomePoints = settings.data()!['welcome_points'];
         }
       } catch (e) {}
@@ -165,8 +178,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _forceLogout(String message) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); 
-    _userSubscription?.cancel(); 
+    await prefs.clear();
+    _userSubscription?.cancel();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red[800]));
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
@@ -196,24 +209,34 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: isDark ? Colors.grey[700] : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                Text('Что вы хотите сделать?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                Text('Чем можем помочь ?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                 const SizedBox(height: 24),
+                
+                // КНОПКА ДЛЯ ЛЕНИВЫХ (SOS)
                 ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.blue[900]?.withOpacity(0.3) : Colors.blue[50],
-                  leading: CircleAvatar(backgroundColor: isDark ? Colors.blue[900]?.withOpacity(0.5) : Colors.blue[100], child: Icon(Icons.build_circle, color: isDark ? Colors.blue[300] : Colors.blue[700])),
-                  title: Text('Вызвать мастера / Ремонт', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                  subtitle: Text('Сразу прямая форма заказа', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
-                  onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen())); },
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.red[900]?.withOpacity(0.3) : Colors.red[50],
+                  leading: CircleAvatar(backgroundColor: isDark ? Colors.red[900]?.withOpacity(0.5) : Colors.red[100], child: Icon(Icons.sos, color: isDark ? Colors.red[300] : Colors.red[700])),
+                  title: Text('Вызвать мастера', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  subtitle: Text('Не знаю, что сломалось', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
+                  onTap: () { 
+                    Navigator.pop(context); 
+                    // Пока ведет на старый экран, потом создадим отдельный
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen())); 
+                  },
                 ),
                 const SizedBox(height: 12),
+
+                // КНОПКА ИЗ КАТАЛОГА (Для тех кто знает)
                 ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.purple[900]?.withOpacity(0.3) : Colors.purple[50],
-                  leading: CircleAvatar(backgroundColor: isDark ? Colors.purple[900]?.withOpacity(0.5) : Colors.purple[100], child: Icon(Icons.layers, color: isDark ? Colors.purple[300] : Colors.purple[700])),
-                  title: Text('Каталог наших услуг', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                  subtitle: Text('Витрина услуг перед заказом', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.blue[900]?.withOpacity(0.3) : Colors.blue[50],
+                  leading: CircleAvatar(backgroundColor: isDark ? Colors.blue[900]?.withOpacity(0.5) : Colors.blue[100], child: Icon(Icons.list_alt, color: isDark ? Colors.blue[300] : Colors.blue[700])),
+                  title: Text('Выбрать услугу из Каталога', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  subtitle: Text('Точно знаю, что мне нужно', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
                   onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ServicesCatalogScreen())); },
                 ),
                 const SizedBox(height: 12),
+
+                // КНОПКА МАГАЗИНА
                 ListTile(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.orange[900]?.withOpacity(0.3) : Colors.orange[50],
                   leading: CircleAvatar(backgroundColor: isDark ? Colors.orange[900]?.withOpacity(0.5) : Colors.orange[100], child: Icon(Icons.shopping_bag, color: isDark ? Colors.orange[300] : Colors.orange[700])),
@@ -521,6 +544,16 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Theme.of(context).cardColor, 
         elevation: 1,
         title: Text(_currentIndex == 0 ? 'M-Service' : 'Профиль', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w900, fontSize: 24)),
+        actions: [
+          // ИКОНКА УВЕДОМЛЕНИЙ (Колокольчик)
+          IconButton(
+            icon: Icon(Icons.notifications_none, color: isDark ? Colors.white : Colors.blueGrey[900]),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsScreen()));
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: IndexedStack(
         index: _currentIndex, 
