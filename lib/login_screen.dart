@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
           .where('status', isEqualTo: 'pending')
           .get();
 
-      if (pendingSnapshot.docs.isEmpty) return; 
+      if (pendingSnapshot.docs.isEmpty) return;
 
       int totalBonus = 0;
       final batch = db.batch();
@@ -44,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = doc.data();
         final amount = data['amount'] as int? ?? 0;
         final senderPhone = data['sender_phone'] ?? 'Друг';
-        
+
         totalBonus += amount;
 
         batch.update(doc.reference, {'status': 'completed'});
@@ -107,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('phone', fullPhone);
               await prefs.setString('client_name', data['name'] ?? 'Клиент');
-              
+
               await _capturePendingBonuses(fullPhone);
 
               if (mounted) {
@@ -145,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         final doc = await FirebaseFirestore.instance.collection('clients').doc(fullPhone).get();
-        
+
         if (doc.exists) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['is_approved'] == true || data['rejection_reason'] == null) {
@@ -155,13 +155,13 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
 
-        int welcomeBonus = 10; 
+        int welcomeBonus = 10;
         try {
           final loyaltyDoc = await FirebaseFirestore.instance
               .collection('settings')
               .doc('loyalty')
               .get();
-              
+
           if (loyaltyDoc.exists && loyaltyDoc.data() != null) {
             final data = loyaltyDoc.data()!;
             if (data.containsKey('welcome_points')) {
@@ -186,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
           'is_approved': false,
           'sms_code': generatedCode,
           'rejection_reason': null,
-          'bonus_points': welcomeBonus, 
+          'bonus_points': welcomeBonus,
         });
 
         if (welcomeBonus > 0) {
@@ -268,17 +268,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (await canLaunchUrl(url)) await launchUrl(url);
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.chat, color: Colors.orange),
-                title: Text('Чат с поддержкой', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openGuestChat();
-                },
-              ),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: () => Navigator.pop(ctx), 
+                onPressed: () => Navigator.pop(ctx),
                 child: const Text('Отмена', style: TextStyle(color: Colors.grey))
               )
             ],
@@ -288,43 +280,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _openGuestChat() {
-    final rawPhone = _phoneController.text.trim().replaceAll(' ', '');
-    if (rawPhone.length < 8 && _currentCheckingPhone == null) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-         content: Text('Укажите ваш номер в поле логина (8 цифр), чтобы мы знали, кому отвечать в чате 🤝', style: TextStyle(fontSize: 15)),
-         backgroundColor: Colors.blueGrey,
-         duration: Duration(seconds: 6), 
-       ));
-       return;
-    }
-    
-    final chatPhone = _currentCheckingPhone ?? '+993$rawPhone';
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20))
-          ),
-          child: GuestChatWidget(phone: chatPhone),
-        ),
-      ),
-    );
-  }
-
   Widget _buildVerificationScreen(bool isDark) {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('clients').doc(_currentCheckingPhone).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        
+
         final data = snapshot.data!.data() as Map<String, dynamic>?;
         if (data == null) return const Center(child: Text('Ошибка данных'));
 
@@ -353,7 +314,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setString('phone', _currentCheckingPhone!);
                       await prefs.setString('client_name', data['name'] ?? 'Клиент');
-                      
+
                       await _capturePendingBonuses(_currentCheckingPhone!);
 
                       if (mounted) {
@@ -368,7 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                     child: const Text('ДАЛЕЕ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
-                ] 
+                ]
                 else if (rejectionReason != null && rejectionReason.isNotEmpty) ...[
                   const Icon(Icons.cancel, size: 80, color: Colors.red),
                   const SizedBox(height: 24),
@@ -381,7 +342,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () => setState(() => _currentCheckingPhone = null),
                     child: const Text('ИЗМЕНИТЬ НОМЕР ТЕЛЕФОНА', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
-                ] 
+                ]
                 else ...[
                   const Icon(Icons.mark_email_unread, size: 80, color: Colors.orange),
                   const SizedBox(height: 24),
@@ -462,7 +423,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (_currentCheckingPhone != null) {
       return Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor, 
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
           child: Column(
             children: [
@@ -471,23 +432,11 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
           ),
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _openGuestChat,
-          backgroundColor: Colors.orange,
-          icon: const Icon(Icons.support_agent, color: Colors.white),
-          label: const Text('Помощь', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        ),
       );
     }
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openGuestChat,
-        backgroundColor: Colors.orange,
-        icon: const Icon(Icons.support_agent, color: Colors.white),
-        label: const Text('Помощь', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -516,7 +465,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 48),
 
                       if (!_isLogin) ...[
-                        _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.name, isDark: isDark),
+                        // ИСПРАВЛЕНО: TextInputType.text принудительно открывает буквы
+                        _buildTextField(_nameController, 'Ваше имя', Icons.person, keyboardType: TextInputType.text, isDark: isDark),
                         const SizedBox(height: 16),
                       ],
 
@@ -550,8 +500,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           elevation: 0,
                         ),
                         onPressed: _isLoading ? null : _submit,
-                        child: _isLoading 
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                        child: _isLoading
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : Text(_isLogin ? 'ВОЙТИ' : 'ОТПРАВИТЬ', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
                       ),
                       const SizedBox(height: 24),
@@ -589,7 +539,8 @@ class _LoginScreenState extends State<LoginScreen> {
       keyboardType: keyboardType,
       obscureText: obscureText,
       maxLength: maxLength,
-      textCapitalization: keyboardType == TextInputType.name ? TextCapitalization.words : TextCapitalization.none,
+      // ИСПРАВЛЕНО: Автоматически делаем первую букву заглавной для текста
+      textCapitalization: (keyboardType == TextInputType.name || keyboardType == TextInputType.text) ? TextCapitalization.words : TextCapitalization.none,
       inputFormatters: keyboardType == TextInputType.phone ? [FilteringTextInputFormatter.digitsOnly] : null,
       style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
       decoration: InputDecoration(
@@ -607,169 +558,6 @@ class _LoginScreenState extends State<LoginScreen> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? Colors.blueGrey[300]! : Colors.blueGrey)),
       ),
-    );
-  }
-}
-
-class GuestChatWidget extends StatefulWidget {
-  final String phone;
-  const GuestChatWidget({super.key, required this.phone});
-
-  @override
-  _GuestChatWidgetState createState() => _GuestChatWidgetState();
-}
-
-class _GuestChatWidgetState extends State<GuestChatWidget> {
-  final _msgController = TextEditingController();
-
-  void _sendMessage() async {
-    if (_msgController.text.trim().isEmpty) return;
-    
-    final text = _msgController.text.trim();
-    _msgController.clear();
-    FocusScope.of(context).unfocus();
-
-    final db = FirebaseFirestore.instance;
-    final chatId = 'guest_${widget.phone}';
-    final chatRef = db.collection('support_chats').doc(chatId);
-
-    await chatRef.set({
-      'phone': widget.phone,
-      'is_guest': true,
-      'last_message': text,
-      'updated_at': FieldValue.serverTimestamp(),
-      'has_unread_admin': true,
-    }, SetOptions(merge: true));
-
-    await chatRef.collection('messages').add({
-      'text': text,
-      'sender_id': widget.phone,
-      'is_admin': false,
-      'created_at': FieldValue.serverTimestamp(),
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final chatId = 'guest_${widget.phone}';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.grey[900] : Colors.blueGrey[900],
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20))
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.support_agent, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Чат с поддержкой', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                ],
-              ),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.white70),
-                onPressed: () => Navigator.pop(context),
-              )
-            ],
-          ),
-        ),
-        
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('support_chats')
-                .doc(chatId)
-                .collection('messages')
-                .orderBy('created_at', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              final docs = snapshot.data!.docs;
-              
-              if (docs.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32.0),
-                    child: Text('Опишите вашу проблему, и администратор ответит вам в ближайшее время.', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white54 : Colors.grey)),
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                reverse: true,
-                padding: const EdgeInsets.all(16),
-                itemCount: docs.length,
-                itemBuilder: (context, index) {
-                  final msg = docs[index].data() as Map<String, dynamic>;
-                  final isAdmin = msg['is_admin'] ?? false;
-                  
-                  return Align(
-                    alignment: isAdmin ? Alignment.centerLeft : Alignment.centerRight,
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isAdmin ? (isDark ? Colors.grey[800] : Colors.grey[200]) : (isDark ? Colors.blueGrey[700] : Colors.blueGrey[800]),
-                        borderRadius: BorderRadius.circular(12).copyWith(
-                          bottomRight: isAdmin ? const Radius.circular(12) : Radius.zero,
-                          bottomLeft: isAdmin ? Radius.zero : const Radius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        msg['text'] ?? '',
-                        style: TextStyle(color: isAdmin ? (isDark ? Colors.white : Colors.black87) : Colors.white),
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-
-        SafeArea(
-          bottom: true,
-          child: Container(
-            padding: const EdgeInsets.all(8.0),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.05), blurRadius: 10, offset: const Offset(0, -5))],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _msgController,
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                    decoration: InputDecoration(
-                      hintText: 'Введите сообщение...',
-                      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[500]),
-                      filled: true,
-                      fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: isDark ? Colors.blueGrey[700] : Colors.orange,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                    onPressed: _sendMessage,
-                  ),
-                )
-              ],
-            ),
-          ),
-        )
-      ],
     );
   }
 }
