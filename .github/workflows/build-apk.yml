@@ -40,17 +40,27 @@ jobs:
         run: |
           sed -i 's/<application/<uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.CAMERA" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" \/>\n    <application/g' android/app/src/main/AndroidManifest.xml
 
-      - name: Fix Android SDK versions
+      - name: Fix Android SDK versions and Plugin Namespaces
         run: |
-          find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' {} +
-          find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdk 33/compileSdk 34/g' {} +
-          sed -i 's/compileSdk = 33/compileSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
-          sed -i 's/targetSdk = 33/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
-          find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec grep -q "namespace" {} || sed -i "/android {/a \    namespace 'com.llfbandit.record'" {} +
+          sed -i 's/compileSdk = 33/compileSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
+          sed -i 's/targetSdk = 33/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
+          sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle.kts 2>/dev/null || true
+          sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle.kts 2>/dev/null || true
 
-      # --- ЧИТАЕМ СЕКРЕТЫ И НАСТРАИВАЕМ ПОДПИСЬ (УНИВЕРСАЛЬНЫЙ МЕТОД) ---
+          # Безопасный обход плагинов в кэше без падений команды find
+          for d in /home/runner/.pub-cache/hosted/pub.dev/*/ ; do
+            if [ -f "${d}android/build.gradle" ]; then
+              if ! grep -q "namespace" "${d}android/build.gradle"; then
+                echo "Adding namespace to ${d}"
+                plugin_name=$(basename "$d" | cut -d'-' -f1)
+                sed -i "/android {/a \    namespace 'com.plugin.$plugin_name'" "${d}android/build.gradle"
+              fi
+            fi
+          done
+
+      # --- ЧИТАЕМ СЕКРЕТЫ И НАСТРАИВАЕМ ПОДПИСЬ ---
       - name: Inject Secret Keys and Permanent Keystore
         env:
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -58,11 +68,8 @@ jobs:
         run: |
           mkdir -p assets
           echo "$FIREBASE_SECRET" | base64 -d > assets/firebase_credentials.json
-          
-          # Расшифровываем наш постоянный ключ!
           echo "$KEYSTORE_SECRET" | base64 -d > android/app/upload-keystore.jks
           
-          # Умный скрипт настройки подписи для любого типа gradle-файлов
           cat << 'EOF' > setup_signing.dart
           import 'dart:io';
           void main() {
@@ -92,7 +99,6 @@ jobs:
           EOF
           dart setup_signing.dart
 
-      # --- СБОРКА С АВТО-ПОВЫШЕНИЕМ ВЕРСИИ ---
       - name: Build APK
         run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
 
