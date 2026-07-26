@@ -35,6 +35,11 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # --- ДОБАВЛЯЕМ ПРАВА ДЛЯ МИКРОФОНА, КАМЕРЫ И ГАЛЕРЕИ ---
+      - name: Add Permissions to AndroidManifest
+        run: |
+          sed -i 's/<application/<uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.CAMERA" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" \/>\n    <application/g' android/app/src/main/AndroidManifest.xml
+
       - name: Fix Android SDK versions
         run: |
           find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' {} +
@@ -104,3 +109,4 @@ jobs:
         with:
           name: ${{ env.FINAL_ZIP_NAME }}
           path: build/app/outputs/flutter-apk/${{ env.FINAL_APK_NAME }}
+
