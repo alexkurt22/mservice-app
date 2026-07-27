@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:record/record.dart'; // Версия 4.4.4
+import 'package:record/record.dart';
 import 'support_chat_screen.dart';
 
 class CreateOrderScreen extends StatefulWidget {
@@ -42,8 +42,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   String? _attachedAudioPath;
   bool _isRecording = false;
   
-  // ИСПРАВЛЕНО ДЛЯ record: ^4.4.4
-  final _audioRecorder = Record();
+  final _audioRecorder = AudioRecorder(); // Для версии 5.1.2+
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
@@ -98,7 +97,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // --- ЛОГИКА АУДИО (ИСПРАВЛЕНО ДЛЯ record: ^4.4.4) ---
+  // --- ЛОГИКА АУДИО ---
   Future<void> _toggleRecording() async {
     try {
       if (_isRecording) {
@@ -117,11 +116,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           final tempDir = Directory.systemTemp.path;
           final audioPath = '$tempDir/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
           
-          // Синтаксис старта для версии 4.4.4
           await _audioRecorder.start(
-            path: audioPath,
-            encoder: AudioEncoder.aacLc, 
-            bitRate: 64000
+            const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000), 
+            path: audioPath
           );
           
           setState(() {
@@ -476,3 +473,4 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 }
+
