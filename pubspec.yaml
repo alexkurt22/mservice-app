@@ -21,8 +21,11 @@ dependencies:
   googleapis_auth: ^1.4.1
   http: ^1.2.0
 
+# ВОТ ОНО - БЛОКИРУЕМ БАГОВАННЫЕ ОБНОВЛЕНИЯ GOOGLE:
 dependency_overrides:
-  jni: 0.9.3
+  shared_preferences_android: 2.2.2
+  path_provider_android: 2.2.4
+  url_launcher_android: 6.3.3
 
 dev_dependencies:
   flutter_test:
