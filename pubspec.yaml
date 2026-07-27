@@ -20,6 +20,8 @@ dependencies:
   firebase_messaging: ^15.2.10
   googleapis_auth: ^1.4.1
   http: ^1.2.0
+  dependency_overrides:
+    jni: 0.9.3
 
 dev_dependencies:
   flutter_test:
