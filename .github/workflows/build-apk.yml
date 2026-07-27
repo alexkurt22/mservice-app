@@ -48,33 +48,16 @@ jobs:
           EOF
           dart fix_manifest.dart
 
-      # --- ЭЛЕГАНТНЫЙ ФИКС БАГА JNI ---
-      - name: Force stable JNI version
-        run: |
-          echo "" >> pubspec.yaml
-          echo "dependency_overrides:" >> pubspec.yaml
-          echo "  jni: 0.9.3" >> pubspec.yaml
-
       - name: Install dependencies
         run: flutter pub get
 
-      # --- ИСПРАВЛЕНИЕ ВЕРСИЙ SDK И NAMESPACE ---
-      - name: Fix Android SDK versions and Plugin Namespaces
+      # --- ИСПРАВЛЕНИЕ ВЕРСИЙ SDK ---
+      - name: Fix Android SDK versions
         run: |
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/compileSdk = 33/compileSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
           sed -i 's/targetSdk = 33/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
-
-          # Безопасный обход плагинов
-          for d in /home/runner/.pub-cache/hosted/pub.dev/*/ ; do
-            if [ -f "${d}android/build.gradle" ]; then
-              if ! grep -q "namespace" "${d}android/build.gradle"; then
-                plugin_name=$(basename "$d" | cut -d'-' -f1)
-                sed -i "/android {/a \    namespace 'com.plugin.$plugin_name'" "${d}android/build.gradle"
-              fi
-            fi
-          done
 
       # --- ЧИТАЕМ СЕКРЕТЫ И НАСТРАИВАЕМ ПОДПИСЬ ---
       - name: Inject Secret Keys and Permanent Keystore
