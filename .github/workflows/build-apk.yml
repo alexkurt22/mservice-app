@@ -40,20 +40,20 @@ jobs:
         run: |
           sed -i 's/<application/<uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.CAMERA" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" \/>\n    <application/g' android/app/src/main/AndroidManifest.xml
 
-      - name: Fix Android SDK versions and Plugin Namespaces
+      - name: Fix Android SDK versions, Plugins and JNI bug
         run: |
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/compileSdk = 33/compileSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
           sed -i 's/targetSdk = 33/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
-          sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle.kts 2>/dev/null || true
-          sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle.kts 2>/dev/null || true
 
-          # Безопасный обход плагинов в кэше без падений команды find
+          # ФИКС БАГА JNI: Удаляем проблемный блок kotlin { ... }, который крашит сборку
+          find /home/runner/.pub-cache/hosted/pub.dev/ -name "build.gradle" | grep "/jni-" | xargs sed -i '/kotlin {/,/}/d' || true
+
+          # Безопасный обход плагинов в кэше для добавления namespace
           for d in /home/runner/.pub-cache/hosted/pub.dev/*/ ; do
             if [ -f "${d}android/build.gradle" ]; then
               if ! grep -q "namespace" "${d}android/build.gradle"; then
-                echo "Adding namespace to ${d}"
                 plugin_name=$(basename "$d" | cut -d'-' -f1)
                 sed -i "/android {/a \    namespace 'com.plugin.$plugin_name'" "${d}android/build.gradle"
               fi
@@ -116,4 +116,3 @@ jobs:
         with:
           name: ${{ env.FINAL_ZIP_NAME }}
           path: build/app/outputs/flutter-apk/${{ env.FINAL_APK_NAME }}
-
