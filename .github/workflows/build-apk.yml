@@ -18,6 +18,7 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -60,3 +61,46 @@ jobs:
           import 'dart:io';
           void main() {
             var kts = File('android/app/build.gradle.kts');
+            var gradle = File('android/app/build.gradle');
+            if (kts.existsSync()) {
+              var text = kts.readAsStringSync();
+              text = text.replaceFirst(
+                'buildTypes {',
+                'signingConfigs {\n        create("release") {\n            storeFile = file("upload-keystore.jks")\n            storePassword = "mservice123"\n            keyAlias = "upload"\n            keyPassword = "mservice123"\n        }\n    }\n    buildTypes {'
+              );
+              text = text.replaceAll('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")');
+              text = text.replaceAll('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.getByName("release")');
+              kts.writeAsStringSync(text);
+              print('Configured Kotlin DSL (build.gradle.kts)');
+            } else if (gradle.existsSync()) {
+              var text = gradle.readAsStringSync();
+              text = text.replaceFirst(
+                'buildTypes {',
+                'signingConfigs {\n        release {\n            storeFile file("upload-keystore.jks")\n            storePassword "mservice123"\n            keyAlias "upload"\n            keyPassword "mservice123"\n        }\n    }\n    buildTypes {'
+              );
+              text = text.replaceAll('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release');
+              gradle.writeAsStringSync(text);
+              print('Configured Groovy (build.gradle)');
+            }
+          }
+          EOF
+          dart setup_signing.dart
+
+      # --- СБОРКА С АВТО-ПОВЫШЕНИЕМ ВЕРСИИ ---
+      - name: Build APK
+        run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+
+      - name: Rename APK with Date and Time
+        run: |
+          export TZ="Asia/Ashgabat"
+          BUILD_TIME=$(date +'%d-%m-%Y_%H-%M')
+          NEW_NAME="MService_App_v1.0.${{ github.run_number }}_${BUILD_TIME}.apk"
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/$NEW_NAME
+          echo "FINAL_APK_NAME=$NEW_NAME" >> $GITHUB_ENV
+          echo "FINAL_ZIP_NAME=MService_App_v1.0.${{ github.run_number }}_${BUILD_TIME}" >> $GITHUB_ENV
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FINAL_ZIP_NAME }}
+          path: build/app/outputs/flutter-apk/${{ env.FINAL_APK_NAME }}
