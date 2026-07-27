@@ -1,10 +1,10 @@
 import 'dart:io';
-import 'dart:convert'; // Для кодирования в Base64
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:record/record.dart';
+import 'package:record/record.dart'; // Версия 4.4.4
 import 'support_chat_screen.dart';
 
 class CreateOrderScreen extends StatefulWidget {
@@ -17,7 +17,7 @@ class CreateOrderScreen extends StatefulWidget {
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _problemController = TextEditingController();
   
-  // --- ТИПЫ ТЕХНИКИ И НАПРАВЛЕНИЯ БИЗНЕСА (БЕЗ ТЕЛЕФОНОВ!) ---
+  // --- ТИПЫ ТЕХНИКИ И НАПРАВЛЕНИЯ БИЗНЕСА (БЕЗ ТЕЛЕФОНОВ) ---
   final List<Map<String, dynamic>> _deviceTypes = [
     {'name': 'Компьютеры / ИТ', 'icon': Icons.computer},
     {'name': 'Автосервис', 'icon': Icons.directions_car},
@@ -41,7 +41,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   File? _attachedImage;
   String? _attachedAudioPath;
   bool _isRecording = false;
-  final _audioRecorder = AudioRecorder();
+  
+  // ИСПРАВЛЕНО ДЛЯ record: ^4.4.4
+  final _audioRecorder = Record();
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
@@ -51,10 +53,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     super.dispose();
   }
 
-  // --- ЛОГИКА ФОТО (С СИЛЬНЫМ СЖАТИЕМ ДЛЯ БАЗЫ) ---
+  // --- ЛОГИКА ФОТО (СЖАТИЕ) ---
   Future<void> _pickImage(ImageSource source) async {
     try {
-      // Сжимаем фото до ~50-100 КБ, чтобы легко поместилось в бесплатный Firestore
       final pickedFile = await _imagePicker.pickImage(
         source: source, 
         imageQuality: 40, 
@@ -97,7 +98,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // --- ЛОГИКА АУДИО (ЭКОНОМНЫЙ БИТРЕЙТ) ---
+  // --- ЛОГИКА АУДИО (ИСПРАВЛЕНО ДЛЯ record: ^4.4.4) ---
   Future<void> _toggleRecording() async {
     try {
       if (_isRecording) {
@@ -116,10 +117,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           final tempDir = Directory.systemTemp.path;
           final audioPath = '$tempDir/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
           
-          // Пишем с низким битрейтом (64 kbps), чтобы размер файла был крошечным
+          // Синтаксис старта для версии 4.4.4
           await _audioRecorder.start(
-            const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000), 
-            path: audioPath
+            path: audioPath,
+            encoder: AudioEncoder.aacLc, 
+            bitRate: 64000
           );
           
           setState(() {
@@ -135,7 +137,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
-  // --- ХИТРАЯ ОТПРАВКА БЕЗ КАРТЫ (КОНВЕРТАЦИЯ В BASE64) ---
+  // --- ОТПРАВКА БЕЗ КАРТЫ (КОНВЕРТАЦИЯ В BASE64) ---
   Future<void> _submitOrder() async {
     if (_problemController.text.trim().isEmpty && _attachedImage == null && _attachedAudioPath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -154,20 +156,17 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       String? imageBase64;
       String? audioBase64;
 
-      // Превращаем картинку в текст
       if (_attachedImage != null) {
         final bytes = await _attachedImage!.readAsBytes();
         imageBase64 = base64Encode(bytes);
       }
 
-      // Превращаем аудио в текст
       if (_attachedAudioPath != null) {
         final audioFile = File(_attachedAudioPath!);
         final bytes = await audioFile.readAsBytes();
         audioBase64 = base64Encode(bytes);
       }
 
-      // Сохраняем текстовый код прямо в базу
       await FirebaseFirestore.instance.collection('orders').add({
         'client_name': clientName,
         'phone': phone,
@@ -175,8 +174,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         'device_type': _selectedDeviceType, 
         'problem': _problemController.text.trim(),
         'payment_method': _selectedPaymentMethod,
-        'image_base64': imageBase64, // Текст вместо файла!
-        'audio_base64': audioBase64, // Текст вместо файла!
+        'image_base64': imageBase64,
+        'audio_base64': audioBase64,
         'status': 'new',
         'created_at': FieldValue.serverTimestamp(),
         'has_unread_update': false,
@@ -352,7 +351,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     ),
                   ),
 
-                  // ИНДИКАТОРЫ ПРИКРЕПЛЕННЫХ ФАЙЛОВ
                   if (_attachedImage != null || _attachedAudioPath != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -389,7 +387,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       ),
                     ),
 
-                  // ПАНЕЛЬ КНОПОК
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade200))),
@@ -479,4 +476,3 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 }
-
