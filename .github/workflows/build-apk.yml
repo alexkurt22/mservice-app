@@ -51,13 +51,63 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # --- ИСПРАВЛЕНИЕ ВЕРСИЙ SDK ---
-      - name: Fix Android SDK versions
+      # --- ИДЕАЛЬНЫЙ СКРИПТ НА DART ДЛЯ ПОЧИНКИ ВСЕХ БАГОВ ПЛАГИНОВ ---
+      - name: Fix Android SDK, Namespaces and JNI bug
         run: |
-          sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
-          sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
-          sed -i 's/compileSdk = 33/compileSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
-          sed -i 's/targetSdk = 33/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
+          cat << 'EOF' > fix_build.dart
+          import 'dart:io';
+          void main() {
+            // 1. Повышаем версии SDK в самом приложении
+            final appGradle = File('android/app/build.gradle');
+            if (appGradle.existsSync()) {
+              var text = appGradle.readAsStringSync();
+              text = text.replaceAll('compileSdkVersion 33', 'compileSdkVersion 34');
+              text = text.replaceAll('targetSdkVersion 33', 'targetSdkVersion 34');
+              appGradle.writeAsStringSync(text);
+            }
+            
+            final appGradleKts = File('android/app/build.gradle.kts');
+            if (appGradleKts.existsSync()) {
+              var text = appGradleKts.readAsStringSync();
+              text = text.replaceAll('compileSdk = 33', 'compileSdk = 34');
+              text = text.replaceAll('targetSdk = 33', 'targetSdk = 34');
+              appGradleKts.writeAsStringSync(text);
+            }
+
+            // 2. Лечим баг JNI и добавляем namespace во все плагины в кэше
+            final pubCache = Directory('/home/runner/.pub-cache/hosted/pub.dev/');
+            if (pubCache.existsSync()) {
+              for (var dir in pubCache.listSync()) {
+                if (dir is Directory) {
+                  final buildGradle = File('${dir.path}/android/build.gradle');
+                  if (buildGradle.existsSync()) {
+                    var content = buildGradle.readAsStringSync();
+                    bool changed = false;
+                    
+                    // Вырезаем багованный блок kotlin { ... } из JNI
+                    if (dir.path.contains('/jni-') && content.contains('kotlin {')) {
+                      content = content.replaceAll(RegExp(r'kotlin\s*\{[^}]*\}'), '');
+                      changed = true;
+                    }
+                    
+                    // Добавляем namespace, если его нет (чтобы Gradle 8+ не ругался)
+                    if (!content.contains('namespace ') && content.contains('android {')) {
+                      final pluginName = dir.path.split('/').last.split('-').first;
+                      final cleanName = pluginName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+                      content = content.replaceFirst('android {', "android {\n    namespace 'com.plugin.$cleanName'");
+                      changed = true;
+                    }
+                    
+                    if (changed) {
+                      buildGradle.writeAsStringSync(content);
+                    }
+                  }
+                }
+              }
+            }
+          }
+          EOF
+          dart fix_build.dart
 
       # --- ЧИТАЕМ СЕКРЕТЫ И НАСТРАИВАЕМ ПОДПИСЬ ---
       - name: Inject Secret Keys and Permanent Keystore
@@ -113,3 +163,4 @@ jobs:
         with:
           name: ${{ env.FINAL_ZIP_NAME }}
           path: build/app/outputs/flutter-apk/${{ env.FINAL_APK_NAME }}
+
