@@ -26,31 +26,47 @@ jobs:
           
       - name: Generate system files
         run: flutter create --platforms=android .
-        
-      - name: Fix Android Manifest for SMS
+
+      # --- БЕЗОПАСНОЕ ДОБАВЛЕНИЕ ПРАВ (МИКРОФОН, КАМЕРА, СМС) ---
+      - name: Fix Android Manifest (Permissions & SMS)
         run: |
-          echo "import 'dart:io'; void main() { var f = File('android/app/src/main/AndroidManifest.xml'); var text = f.readAsStringSync(); text = text.replaceFirst('<application', '<queries><intent><action android:name=\"android.intent.action.VIEW\"/><data android:scheme=\"sms\"/></intent></queries><application'); f.writeAsStringSync(text); }" > fix_manifest.dart
+          cat << 'EOF' > fix_manifest.dart
+          import 'dart:io';
+          void main() {
+            var f = File('android/app/src/main/AndroidManifest.xml');
+            var text = f.readAsStringSync();
+            var additions = '''
+            <queries><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="sms"/></intent></queries>
+            <uses-permission android:name="android.permission.RECORD_AUDIO" />
+            <uses-permission android:name="android.permission.CAMERA" />
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+            <application
+            ''';
+            text = text.replaceFirst('<application', additions);
+            f.writeAsStringSync(text);
+          }
+          EOF
           dart fix_manifest.dart
+
+      # --- ЭЛЕГАНТНЫЙ ФИКС БАГА JNI ---
+      - name: Force stable JNI version
+        run: |
+          echo "" >> pubspec.yaml
+          echo "dependency_overrides:" >> pubspec.yaml
+          echo "  jni: 0.9.3" >> pubspec.yaml
 
       - name: Install dependencies
         run: flutter pub get
 
-      # --- ДОБАВЛЯЕМ ПРАВА ДЛЯ МИКРОФОНА, КАМЕРЫ И ГАЛЕРЕИ ---
-      - name: Add Permissions to AndroidManifest
-        run: |
-          sed -i 's/<application/<uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.CAMERA" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" \/>\n    <application/g' android/app/src/main/AndroidManifest.xml
-
-      - name: Fix Android SDK versions, Plugins and JNI bug
+      # --- ИСПРАВЛЕНИЕ ВЕРСИЙ SDK И NAMESPACE ---
+      - name: Fix Android SDK versions and Plugin Namespaces
         run: |
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/compileSdk = 33/compileSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
           sed -i 's/targetSdk = 33/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
 
-          # ФИКС БАГА JNI: Удаляем проблемный блок kotlin { ... }, который крашит сборку
-          find /home/runner/.pub-cache/hosted/pub.dev/ -name "build.gradle" | grep "/jni-" | xargs sed -i '/kotlin {/,/}/d' || true
-
-          # Безопасный обход плагинов в кэше для добавления namespace
+          # Безопасный обход плагинов
           for d in /home/runner/.pub-cache/hosted/pub.dev/*/ ; do
             if [ -f "${d}android/build.gradle" ]; then
               if ! grep -q "namespace" "${d}android/build.gradle"; then
@@ -84,7 +100,6 @@ jobs:
               text = text.replaceAll('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")');
               text = text.replaceAll('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.getByName("release")');
               kts.writeAsStringSync(text);
-              print('Configured Kotlin DSL (build.gradle.kts)');
             } else if (gradle.existsSync()) {
               var text = gradle.readAsStringSync();
               text = text.replaceFirst(
@@ -93,7 +108,6 @@ jobs:
               );
               text = text.replaceAll('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release');
               gradle.writeAsStringSync(text);
-              print('Configured Groovy (build.gradle)');
             }
           }
           EOF
