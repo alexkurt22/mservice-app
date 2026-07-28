@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Fix Android SDK versions and kill JNI bug
+      - name: Fix Android SDK versions, kill JNI bug, and replace JCenter
         run: |
           find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' {} +
           find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdk 33/compileSdk 34/g' {} +
@@ -62,6 +62,9 @@ jobs:
           
           # УБИЙЦА БАГА JNI (Надежный метод через Perl, который не ломает скобки)
           find /home/runner/.pub-cache/hosted -path "*/jni-*/android/build.gradle" -exec perl -0777 -pi -e 's/kotlin\s*\{[^}]*\}//g' {} + || true
+
+          # --- НОВОЕ: ЗАМЕНЯЕМ УСТАРЕВШИЙ JCENTER НА MAVENCENTRAL ---
+          find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/jcenter()/mavenCentral()/g' {} +
 
       # --- ЧИТАЕМ СЕКРЕТЫ И НАСТРАИВАЕМ ПОДПИСЬ (УНИВЕРСАЛЬНЫЙ МЕТОД) ---
       - name: Inject Secret Keys and Permanent Keystore
