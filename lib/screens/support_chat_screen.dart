@@ -41,7 +41,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     
     _audioPlayer.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
-        setState(() => _currentlyPlayingId = null);
+        if (mounted) setState(() => _currentlyPlayingId = null);
         _audioPlayer.stop();
       }
     });
@@ -52,7 +52,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     final phone = prefs.getString('phone'); 
     if (phone == null) return;
 
-    setState(() => _myPhone = phone);
+    if (mounted) setState(() => _myPhone = phone);
 
     final query = await FirebaseFirestore.instance.collection('chat_rooms')
         .where('type', isEqualTo: 'private')
@@ -60,7 +60,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         .limit(1).get();
 
     if (query.docs.isNotEmpty) {
-      setState(() => _roomId = query.docs.first.id);
+      if (mounted) setState(() => _roomId = query.docs.first.id);
     } else {
       List<String> parts = ['admin', phone];
       parts.sort(); 
@@ -75,7 +75,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         'unread_count': 0, 
         'last_sender': phone, 
       });
-      setState(() => _roomId = newRoomId);
+      if (mounted) setState(() => _roomId = newRoomId);
     }
   }
 
@@ -118,7 +118,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   Future<void> _startRecording() async {
     var statusMicrophone = await Permission.microphone.request();
     if (statusMicrophone != PermissionStatus.granted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет разрешения на микрофон!')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет разрешения на микрофон!')));
       return;
     }
 
@@ -127,7 +127,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       _currentAudioPath = '${tempDir.path}/chat_audio_${DateTime.now().millisecondsSinceEpoch}.aac';
       
       await _audioRecorder!.startRecorder(toFile: _currentAudioPath, codec: Codec.aacADTS);
-      setState(() => _isRecording = true);
+      if (mounted) setState(() => _isRecording = true);
     } catch (e) {
       debugPrint('Ошибка старта записи: $e');
     }
@@ -137,7 +137,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     if (!_isRecording) return;
     try {
       await _audioRecorder!.stopRecorder();
-      setState(() => _isRecording = false);
+      if (mounted) setState(() => _isRecording = false);
 
       if (_currentAudioPath != null) {
         final bytes = await File(_currentAudioPath!).readAsBytes();
@@ -171,7 +171,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     });
 
     try {
-      await PushService.sendPushToAdmins('Новое сообщение', text);
+      await PushService.sendPushToAdmins('Новое сообщение от клиента', text);
     } catch (e) {
       debugPrint('Push send failed: $e');
     }
@@ -181,7 +181,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   Future<void> _playAudio(String messageId, String base64Audio) async {
     if (_currentlyPlayingId == messageId) {
       await _audioPlayer.pause();
-      setState(() => _currentlyPlayingId = null);
+      if (mounted) setState(() => _currentlyPlayingId = null);
       return;
     }
 
@@ -192,13 +192,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       await file.writeAsBytes(bytes);
       
       await _audioPlayer.setFilePath(file.path);
-      setState(() => _currentlyPlayingId = messageId);
+      if (mounted) setState(() => _currentlyPlayingId = messageId);
       await _audioPlayer.play();
     } catch (e) {
       debugPrint("Ошибка проигрывания: $e");
     }
   }
-
 
   String _getDateSeparatorText(DateTime date) {
     final now = DateTime.now();
@@ -212,7 +211,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   }
 
   // --- ОТРИСОВКА ПУЗЫРЯ СООБЩЕНИЯ ---
-  Widget _buildMessageBubble(Map<String, dynamic> data, String messageId, bool isMe, DateTime dt, bool isDark) {
+  Widget _buildMessageBubble(Map<String, dynamic> data, String messageId, bool isMe, DateTime dt, bool isSending, bool isDark) {
     final bubbleColor = isMe 
         ? (isDark ? Colors.blueGrey[700] : Colors.blue[100]) 
         : (isDark ? Colors.grey[800] : Colors.white);
@@ -287,7 +286,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        data['text'], 
+                        data['text'] ?? '🎤 Голосовое сообщение', 
                         style: TextStyle(fontSize: 13, color: textColor, fontStyle: FontStyle.italic),
                       ),
                     ),
@@ -296,21 +295,19 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
               )
             // Иначе просто текст
             else if (data['image_base64'] == null)
-              Text(data['text'], style: TextStyle(fontSize: 15, color: textColor)),
+              Text(data['text'] ?? '', style: TextStyle(fontSize: 15, color: textColor)),
             
             const SizedBox(height: 4),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(DateFormat('HH:mm').format(dt), style: TextStyle(fontSize: 11, color: timeColor)),
+                Text(isSending ? 'Отправка...' : DateFormat('HH:mm').format(dt), style: TextStyle(fontSize: 11, color: timeColor)),
                 if (isMe) ...[
                   const SizedBox(width: 4),
                   Icon(
-                    data['is_read'] == true ? Icons.done_all : Icons.check, 
+                    isSending ? Icons.access_time : (data['is_read'] == true ? Icons.done_all : Icons.check), 
                     size: 14, 
-                    color: data['is_read'] == true 
-                        ? (isDark ? Colors.blue[300] : Colors.blue[600]) 
-                        : timeColor,
+                    color: isSending ? Colors.grey : (data['is_read'] == true ? (isDark ? Colors.blue[300] : Colors.blue[600]) : timeColor),
                   ),
                 ]
               ],
@@ -360,8 +357,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         final bool isMe = data['sender_phone'] == _myPhone;
                         final Timestamp? ts = data['created_at'] as Timestamp?;
                         final DateTime dt = ts?.toDate() ?? DateTime.now();
+                        final bool isSending = ts == null;
                         
-                        if (!isMe && data['is_read'] == false) {
+                        if (!isMe && data['is_read'] == false && !isSending) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             messages[i].reference.update({'is_read': true});
                             FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).update({'unread_count': 0});
@@ -371,11 +369,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         bool showDate = false;
                         if (i == messages.length - 1) {
                           showDate = true; 
-                        } else {
+                        } else if (!isSending) {
                           final prevData = messages[i+1].data() as Map<String, dynamic>;
                           final prevTs = prevData['created_at'] as Timestamp?;
                           if (prevTs != null && ts != null) {
-                            if (prevTs.toDate().day != ts.toDate().day) showDate = true;
+                            if (prevTs.toDate().day != dt.day) showDate = true;
                           }
                         }
 
@@ -400,7 +398,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                                 ),
                               ),
                             
-                            _buildMessageBubble(data, messageId, isMe, dt, isDark),
+                            _buildMessageBubble(data, messageId, isMe, dt, isSending, isDark),
                           ],
                         );
                       },
@@ -481,3 +479,4 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     );
   }
 }
+
