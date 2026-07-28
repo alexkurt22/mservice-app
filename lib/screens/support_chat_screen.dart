@@ -9,7 +9,6 @@ import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../services/push_service.dart';
 
 class SupportChatScreen extends StatefulWidget {
@@ -34,16 +33,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingId;
 
-  // --- ТРАНСКРИБАЦИЯ ---
-  final stt.SpeechToText _speechToText = stt.SpeechToText();
-  String _recognizedText = '';
-
   @override
   void initState() {
     super.initState();
     _initChat();
     _initRecorder();
-    _initSpeechToText();
     
     _audioPlayer.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
@@ -90,10 +84,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     await _audioRecorder!.openRecorder();
   }
 
-  Future<void> _initSpeechToText() async {
-    await _speechToText.initialize();
-  }
-
   @override
   void dispose() {
     _controller.dispose();
@@ -124,7 +114,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     }
   }
 
-  // --- ЗАПИСЬ АУДИО И ТРАНСКРИБАЦИЯ ---
+  // --- ЗАПИСЬ АУДИО ---
   Future<void> _startRecording() async {
     var statusMicrophone = await Permission.microphone.request();
     if (statusMicrophone != PermissionStatus.granted) {
@@ -136,16 +126,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       final tempDir = await getTemporaryDirectory();
       _currentAudioPath = '${tempDir.path}/chat_audio_${DateTime.now().millisecondsSinceEpoch}.aac';
       
-      _recognizedText = '';
-      if (_speechToText.isAvailable) {
-        _speechToText.listen(
-          onResult: (result) {
-            setState(() => _recognizedText = result.recognizedWords);
-          },
-          localeId: 'ru_RU', 
-        );
-      }
-
       await _audioRecorder!.startRecorder(toFile: _currentAudioPath, codec: Codec.aacADTS);
       setState(() => _isRecording = true);
     } catch (e) {
@@ -157,15 +137,13 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     if (!_isRecording) return;
     try {
       await _audioRecorder!.stopRecorder();
-      await _speechToText.stop();
       setState(() => _isRecording = false);
 
       if (_currentAudioPath != null) {
         final bytes = await File(_currentAudioPath!).readAsBytes();
         final base64Audio = base64Encode(bytes);
         
-        String transcription = _recognizedText.isNotEmpty ? _recognizedText : 'Голосовое сообщение';
-        await _sendMessageToDb(text: '🎤 $transcription', audioBase64: base64Audio);
+        await _sendMessageToDb(text: '🎤 Голосовое сообщение', audioBase64: base64Audio);
       }
     } catch (e) {
       debugPrint('Ошибка остановки записи: $e');
@@ -309,7 +287,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        data['text'], // Здесь лежит расшифрованный текст
+                        data['text'], 
                         style: TextStyle(fontSize: 13, color: textColor, fontStyle: FontStyle.italic),
                       ),
                     ),
@@ -330,7 +308,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                   Icon(
                     data['is_read'] == true ? Icons.done_all : Icons.check, 
                     size: 14, 
-                    color: data['is_read'] == true ? (isDark ? Colors.blue[300] : Colors.blue[600]) : timeColor,
+                    color: data['is_read'] == true 
+                        ? (isDark ? Colors.blue[300] : Colors.blue[600]) 
+                        : timeColor,
                   ),
                 ]
               ],
@@ -476,7 +456,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                       ),
                       const SizedBox(width: 8),
                       
-                      // КНОПКА ОТПРАВКИ ИЛИ МИКРОФОН
                       if (_controller.text.trim().isNotEmpty)
                         CircleAvatar(
                           radius: 22,
