@@ -27,7 +27,6 @@ jobs:
       - name: Generate system files
         run: flutter create --platforms=android .
         
-      # --- ДИНАМИЧЕСКИ ДОБАВЛЯЕМ ПРАВА НА СМС, МИКРОФОН И КАМЕРУ ---
       - name: Fix Android Manifest (Permissions & SMS)
         run: |
           cat << 'EOF' > fix_manifest.dart
@@ -51,7 +50,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Fix Android SDK versions, kill JNI bug, and replace JCenter
+      - name: Fix Android SDK versions and kill JNI bug
         run: |
           find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' {} +
           find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdk 33/compileSdk 34/g' {} +
@@ -60,13 +59,9 @@ jobs:
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           
-          # УБИЙЦА БАГА JNI (Надежный метод через Perl, который не ломает скобки)
+          # УБИЙЦА БАГА JNI 
           find /home/runner/.pub-cache/hosted -path "*/jni-*/android/build.gradle" -exec perl -0777 -pi -e 's/kotlin\s*\{[^}]*\}//g' {} + || true
 
-          # --- НОВОЕ: ЗАМЕНЯЕМ УСТАРЕВШИЙ JCENTER НА MAVENCENTRAL ---
-          find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/jcenter()/mavenCentral()/g' {} +
-
-      # --- ЧИТАЕМ СЕКРЕТЫ И НАСТРАИВАЕМ ПОДПИСЬ (УНИВЕРСАЛЬНЫЙ МЕТОД) ---
       - name: Inject Secret Keys and Permanent Keystore
         env:
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -75,10 +70,8 @@ jobs:
           mkdir -p assets
           echo "$FIREBASE_SECRET" | base64 -d > assets/firebase_credentials.json
           
-          # Расшифровываем наш постоянный ключ!
           echo "$KEYSTORE_SECRET" | base64 -d > android/app/upload-keystore.jks
           
-          # Умный скрипт настройки подписи для любого типа gradle-файлов
           cat << 'EOF' > setup_signing.dart
           import 'dart:io';
           void main() {
@@ -93,7 +86,6 @@ jobs:
               text = text.replaceAll('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")');
               text = text.replaceAll('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.getByName("release")');
               kts.writeAsStringSync(text);
-              print('Configured Kotlin DSL (build.gradle.kts)');
             } else if (gradle.existsSync()) {
               var text = gradle.readAsStringSync();
               text = text.replaceFirst(
@@ -102,13 +94,11 @@ jobs:
               );
               text = text.replaceAll('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release');
               gradle.writeAsStringSync(text);
-              print('Configured Groovy (build.gradle)');
             }
           }
           EOF
           dart setup_signing.dart
 
-      # --- СБОРКА С АВТО-ПОВЫШЕНИЕМ ВЕРСИИ ---
       - name: Build APK
         run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
 
@@ -126,3 +116,4 @@ jobs:
         with:
           name: ${{ env.FINAL_ZIP_NAME }}
           path: build/app/outputs/flutter-apk/${{ env.FINAL_APK_NAME }}
+
