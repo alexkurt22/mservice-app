@@ -1,6 +1,12 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'support_chat_screen.dart';
 
 class CreateOrderScreen extends StatefulWidget {
   const CreateOrderScreen({super.key});
@@ -12,10 +18,14 @@ class CreateOrderScreen extends StatefulWidget {
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _problemController = TextEditingController();
   
-  // --- ДИНАМИЧЕСКИЕ КАТЕГОРИИ ---
-  Map<String, List<String>> _categoriesMap = {}; 
-  String? _selectedDirection; 
-  String? _selectedSubCategory; 
+  // --- ТИПЫ ТЕХНИКИ ---
+  final List<Map<String, dynamic>> _deviceTypes = [
+    {'name': 'Компьютеры / ИТ', 'icon': Icons.computer},
+    {'name': 'Автосервис', 'icon': Icons.directions_car},
+    {'name': 'Мебель / Сварка', 'icon': Icons.handyman},
+    {'name': 'Другое', 'icon': Icons.category},
+  ];
+  String _selectedDeviceType = 'Компьютеры / ИТ'; 
   
   // --- СПОСОБ ОПЛАТЫ ---
   String _selectedPaymentMethod = 'Наличные';
@@ -26,61 +36,126 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     'Оплата бонусами'
   ];
   
-  bool _isLoadingCategories = true; 
   bool _isLoading = false; 
+
+  // --- МЕДИА ФАЙЛЫ ---
+  File? _attachedImage;
+  String? _attachedAudioPath;
+  bool _isRecording = false;
+  
+  FlutterSoundRecorder? _audioRecorder;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    _loadCategories(); 
+    _initRecorder();
   }
 
-  // Скачиваем структуру из базы
-  Future<void> _loadCategories() async {
-    try {
-      final doc = await FirebaseFirestore.instance.collection('settings').doc('categories_v2').get();
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-        Map<String, List<String>> tempMap = {};
-        
-        data.forEach((key, value) {
-          tempMap[key] = List<String>.from(value as List);
-        });
+  Future<void> _initRecorder() async {
+    _audioRecorder = FlutterSoundRecorder();
+    await _audioRecorder!.openRecorder();
+  }
 
-        if (tempMap.isNotEmpty && mounted) {
-          setState(() {
-            _categoriesMap = tempMap;
-            _isLoadingCategories = false;
-          });
-          return;
-        }
+  @override
+  void dispose() {
+    _problemController.dispose();
+    _audioRecorder?.closeRecorder();
+    super.dispose();
+  }
+
+  // --- ЛОГИКА ФОТО (СЖАТИЕ) ---
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source, 
+        imageQuality: 40, // Сжимаем фото на 60%
+        maxWidth: 800
+      );
+      if (pickedFile != null) {
+        setState(() => _attachedImage = File(pickedFile.path));
       }
     } catch (e) {
-      debugPrint('Ошибка загрузки категорий: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка фото: $e')));
     }
-    
-    // Подстраховка на случай отсутствия интернета или пустой базы
-    if (mounted) {
+  }
+
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              title: const Text('Сделать фото'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.orange),
+              title: const Text('Выбрать из галереи'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- ЛОГИКА АУДИО (ИСПРАВЛЕНО ДЛЯ FLUTTER_SOUND) ---
+  Future<void> _toggleRecording() async {
+    try {
+      if (_isRecording) {
+        final path = await _audioRecorder!.stopRecorder();
+        setState(() {
+          _isRecording = false;
+          _attachedAudioPath = path;
+        });
+      } else {
+        var status = await Permission.microphone.request();
+        if (status != PermissionStatus.granted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет разрешения на микрофон!')));
+          return;
+        }
+
+        if (_attachedAudioPath != null) {
+          final oldFile = File(_attachedAudioPath!);
+          if (oldFile.existsSync()) oldFile.deleteSync();
+        }
+
+        final tempDir = Directory.systemTemp.path;
+        final audioPath = '$tempDir/audio_${DateTime.now().millisecondsSinceEpoch}.aac';
+        
+        await _audioRecorder!.startRecorder(
+          toFile: audioPath,
+          codec: Codec.aacADTS,
+        );
+        
+        setState(() {
+          _isRecording = true;
+          _attachedAudioPath = null;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка аудио: $e')));
       setState(() {
-        _categoriesMap = {
-          'Компьютерный сервис': ['Смартфон', 'Ноутбук', 'Компьютер (ПК)', 'Другое'],
-        };
-        _isLoadingCategories = false;
+          _isRecording = false;
       });
     }
   }
 
+  // --- ОТПРАВКА ---
   Future<void> _submitOrder() async {
-    if (_selectedDirection == null || _selectedSubCategory == null) {
+    if (_problemController.text.trim().isEmpty && _attachedImage == null && _attachedAudioPath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пожалуйста, выберите направление и услугу'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    if (_problemController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пожалуйста, добавьте описание проблемы'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Пожалуйста, опишите проблему (текстом, фото или голосовым)'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -92,13 +167,29 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final phone = prefs.getString('phone') ?? 'Неизвестный номер';
       final clientName = prefs.getString('client_name') ?? 'Неизвестный пользователь';
 
+      String? imageBase64;
+      String? audioBase64;
+
+      if (_attachedImage != null) {
+        final bytes = await _attachedImage!.readAsBytes();
+        imageBase64 = base64Encode(bytes);
+      }
+
+      if (_attachedAudioPath != null) {
+        final audioFile = File(_attachedAudioPath!);
+        final bytes = await audioFile.readAsBytes();
+        audioBase64 = base64Encode(bytes);
+      }
+
       await FirebaseFirestore.instance.collection('orders').add({
         'client_name': clientName,
         'phone': phone,
-        'category': _selectedDirection, 
-        'device_type': _selectedSubCategory, 
+        'category': 'Вызов мастера', 
+        'device_type': _selectedDeviceType, 
         'problem': _problemController.text.trim(),
-        'payment_method': _selectedPaymentMethod, // Сохраняем способ оплаты
+        'payment_method': _selectedPaymentMethod,
+        'image_base64': imageBase64,
+        'audio_base64': audioBase64,
         'status': 'new',
         'created_at': FieldValue.serverTimestamp(),
         'has_unread_update': false,
@@ -107,7 +198,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Заказ отправлен! Ожидайте ответа администратора.'),
+            content: Text('Заявка отправлена! Мастер скоро свяжется с вами.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 4),
           ),
@@ -116,27 +207,70 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка отправки: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка отправки: $e'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  @override
-  void dispose() {
-    _problemController.dispose();
-    super.dispose();
-  }
-
-  // --- ВСПОМОГАТЕЛЬНЫЙ ВИДЖЕТ ДЛЯ ИКОНОК ОПЛАТЫ ---
   IconData _getPaymentIcon(String method) {
     if (method.contains('карта')) return Icons.credit_card;
     if (method.contains('Перечисление')) return Icons.account_balance;
     if (method.contains('бонус')) return Icons.stars_rounded;
-    return Icons.payments; // Наличные по умолчанию
+    return Icons.payments; 
+  }
+
+  void _onPaymentMethodSelected(String method) {
+    if (method == 'Перечисление') {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Theme.of(context).cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.orange, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('Оплата перечислением', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))
+              ),
+            ],
+          ),
+          content: Text(
+            'Для оплаты перечислением вам требуется предварительно связаться с администрацией.\n\nОбратите внимание: цены могут отличаться, и мы работаем по предоплате.',
+            style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, height: 1.5, fontSize: 15),
+          ),
+          actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() => _selectedPaymentMethod = 'Наличные'); 
+              },
+              child: const Text('Отмена', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() => _selectedPaymentMethod = 'Перечисление');
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const SupportChatScreen()));
+              },
+              icon: const Icon(Icons.chat, color: Colors.white, size: 20),
+              label: const Text('Связаться в чате', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            )
+          ],
+        )
+      );
+    } else {
+      setState(() => _selectedPaymentMethod = method);
+    }
   }
 
   @override
@@ -146,160 +280,214 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor, 
       appBar: AppBar(
-        title: const Text('Новый заказ', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Вызов мастера', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Theme.of(context).cardColor,
         foregroundColor: isDark ? Colors.white : Colors.black87,
         elevation: 1,
       ),
-      body: _isLoadingCategories
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            
+            // --- БЛОК 1: НАПРАВЛЕНИЯ БИЗНЕСА ---
+            Text('КАТЕГОРИЯ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 105,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _deviceTypes.length,
+                itemBuilder: (context, index) {
+                  final device = _deviceTypes[index];
+                  final isSelected = _selectedDeviceType == device['name'];
                   
-                  // --- БЛОК 1: ЧТО НУЖНО ПОЧИНИТЬ ---
-                  Text('ЧТО НУЖНО СДЕЛАТЬ?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
-                  const SizedBox(height: 12),
-                  Card(
-                    elevation: 0,
-                    color: Theme.of(context).cardColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade300)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedDeviceType = device['name']),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 100,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? (isDark ? Colors.blue[900] : Colors.blue[50]) : Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? Colors.blue : (isDark ? Colors.grey[800]! : Colors.grey.shade300),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          DropdownButtonFormField<String>(
-                            value: _selectedDirection,
-                            dropdownColor: Theme.of(context).cardColor,
-                            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                            icon: Icon(Icons.expand_more, color: isDark ? Colors.white54 : Colors.blueGrey),
-                            decoration: InputDecoration(
-                              labelText: 'Направление',
-                              labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[700]),
-                              prefixIcon: Icon(Icons.category, color: isDark ? Colors.white54 : Colors.blueGrey),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              filled: true,
-                              fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
+                          Icon(device['icon'], size: 32, color: isSelected ? Colors.blue : (isDark ? Colors.white54 : Colors.blueGrey)),
+                          const SizedBox(height: 8),
+                          Text(
+                            device['name'],
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? (isDark ? Colors.white : Colors.blue[900]) : (isDark ? Colors.white70 : Colors.black87),
                             ),
-                            hint: Text('Выберите сферу услуг', style: TextStyle(color: isDark ? Colors.white24 : Colors.grey)),
-                            items: _categoriesMap.keys
-                                .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
-                                .toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedDirection = val;
-                                _selectedSubCategory = null; 
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            value: _selectedSubCategory,
-                            dropdownColor: Theme.of(context).cardColor,
-                            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                            icon: Icon(Icons.expand_more, color: isDark ? Colors.white54 : Colors.blueGrey),
-                            decoration: InputDecoration(
-                              labelText: 'Услуга / Устройство',
-                              labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey[700]),
-                              prefixIcon: Icon(Icons.devices, color: isDark ? Colors.white54 : Colors.blueGrey),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              filled: true,
-                              fillColor: _selectedDirection == null 
-                                  ? (isDark ? Colors.grey[900] : Colors.grey[200]) 
-                                  : (isDark ? Colors.grey[800] : Colors.grey[50]),
-                            ),
-                            hint: Text('Сначала выберите направление', style: TextStyle(color: isDark ? Colors.white24 : Colors.grey)),
-                            items: (_selectedDirection != null ? _categoriesMap[_selectedDirection]! : <String>[])
-                                .map<DropdownMenuItem<String>>((String d) => DropdownMenuItem<String>(value: d, child: Text(d)))
-                                .toList(),
-                            onChanged: _selectedDirection == null ? null : (val) => setState(() => _selectedSubCategory = val),
-                          ),
+                          )
                         ],
                       ),
                     ),
-                  ),
+                  );
+                },
+              ),
+            ),
 
-                  // --- БЛОК 2: ОПИСАНИЕ ПРОБЛЕМЫ ---
-                  const SizedBox(height: 24),
-                  Text('ОПИСАНИЕ ПРОБЛЕМЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
-                  const SizedBox(height: 12),
-                  Card(
-                    elevation: 0,
-                    color: Theme.of(context).cardColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade300)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: TextField(
-                        controller: _problemController,
-                        maxLines: 4, 
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                        decoration: InputDecoration(
-                          hintText: 'Опишите проблему или что нужно сделать...\nНапример: Не включается экран, нужно заменить стекло.', 
-                          hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey[400]),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          filled: true,
-                          fillColor: Theme.of(context).cardColor,
-                          contentPadding: const EdgeInsets.all(16),
-                        ),
+            // --- БЛОК 2: ОПИСАНИЕ ПРОБЛЕМЫ ---
+            const SizedBox(height: 32),
+            Text('ОПИШИТЕ ПРОБЛЕМУ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              color: Theme.of(context).cardColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade300)),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: TextField(
+                      controller: _problemController,
+                      maxLines: 4, 
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                      decoration: InputDecoration(
+                        hintText: 'Что случилось?\nНапример: Не включается ноутбук, нужна сборка шкафа или ремонт генератора.', 
+                        hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey[400]),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        filled: true, fillColor: Theme.of(context).cardColor,
+                        contentPadding: const EdgeInsets.all(16),
                       ),
                     ),
                   ),
 
-                  // --- БЛОК 3: СПОСОБ ОПЛАТЫ ---
-                  const SizedBox(height: 24),
-                  Text('СПОСОБ ОПЛАТЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8.0,
-                    runSpacing: 8.0,
-                    children: _paymentMethods.map((method) {
-                      final isSelected = _selectedPaymentMethod == method;
-                      return ChoiceChip(
-                        label: Text(method),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) setState(() => _selectedPaymentMethod = method);
-                        },
-                        avatar: Icon(_getPaymentIcon(method), color: isSelected ? Colors.white : (isDark ? Colors.white54 : Colors.blueGrey), size: 18),
-                        selectedColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900],
-                        backgroundColor: Theme.of(context).cardColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12), 
-                          side: BorderSide(color: isSelected 
-                              ? (isDark ? Colors.blueGrey[700]! : Colors.blueGrey[900]!) 
-                              : (isDark ? Colors.grey[800]! : Colors.grey.shade300))
-                        ),
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87), 
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      );
-                    }).toList(),
-                  ),
-                  
-                  const SizedBox(height: 40),
-                  
-                  // --- КНОПКА ОТПРАВКИ ---
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange[600],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 4,
+                  // ПРЕДПРОСМОТР ПРИКРЕПЛЕННЫХ ФАЙЛОВ
+                  if (_attachedImage != null || _attachedAudioPath != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Column(
+                        children: [
+                          if (_attachedImage != null)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(_attachedImage!, width: 40, height: 40, fit: BoxFit.cover),
+                              ),
+                              title: const Text('Фото прикреплено', style: TextStyle(fontSize: 14)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.close, color: Colors.red),
+                                onPressed: () => setState(() => _attachedImage = null),
+                              ),
+                            ),
+                          if (_attachedAudioPath != null)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const CircleAvatar(backgroundColor: Colors.orange, child: Icon(Icons.audiotrack, color: Colors.white, size: 20)),
+                              title: const Text('Голосовое сообщение', style: TextStyle(fontSize: 14)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.close, color: Colors.red),
+                                onPressed: () {
+                                  final f = File(_attachedAudioPath!);
+                                  if (f.existsSync()) f.deleteSync();
+                                  setState(() => _attachedAudioPath = null);
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                    onPressed: _isLoading ? null : _submitOrder,
-                    child: _isLoading
-                        ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                        : const Text('ОТПРАВИТЬ ЗАЯВКУ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                  ),
-                  const SizedBox(height: 24),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade200))),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(_isRecording ? 'Идёт запись...' : 'Лень писать?', 
+                          style: TextStyle(color: _isRecording ? Colors.red : (isDark ? Colors.white54 : Colors.grey[600]), fontSize: 13, fontWeight: _isRecording ? FontWeight.bold : FontWeight.normal)),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.attach_file, color: isDark ? Colors.blueGrey[400] : Colors.blueGrey),
+                              onPressed: _isRecording ? null : _showImageSourceDialog,
+                            ),
+                            GestureDetector(
+                              onTap: _toggleRecording,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _isRecording ? Colors.red : (isDark ? Colors.orange[900]?.withOpacity(0.3) : Colors.orange[50]),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _isRecording ? Icons.stop : Icons.mic, 
+                                  color: _isRecording ? Colors.white : Colors.orange[700]
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      ],
+                    ),
+                  )
                 ],
               ),
             ),
+
+            // --- БЛОК 3: СПОСОБ ОПЛАТЫ ---
+            const SizedBox(height: 32),
+            Text('СПОСОБ ОПЛАТЫ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey, letterSpacing: 1.2)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8.0,
+              runSpacing: 8.0,
+              children: _paymentMethods.map((method) {
+                final isSelected = _selectedPaymentMethod == method;
+                return ChoiceChip(
+                  label: Text(method),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    if (selected) _onPaymentMethodSelected(method);
+                  },
+                  avatar: Icon(_getPaymentIcon(method), color: isSelected ? Colors.white : (isDark ? Colors.white54 : Colors.blueGrey), size: 18),
+                  selectedColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900],
+                  backgroundColor: Theme.of(context).cardColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12), 
+                    side: BorderSide(color: isSelected ? (isDark ? Colors.blueGrey[700]! : Colors.blueGrey[900]!) : (isDark ? Colors.grey[800]! : Colors.grey.shade300))
+                  ),
+                  labelStyle: TextStyle(color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87), fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                );
+              }).toList(),
+            ),
+            
+            const SizedBox(height: 40),
+            
+            // --- КНОПКА ОТПРАВКИ ---
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[600],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 4,
+              ),
+              onPressed: _isLoading ? null : _submitOrder,
+              child: _isLoading
+                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                  : const Text('ОТПРАВИТЬ ЗАЯВКУ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
     );
   }
 }
