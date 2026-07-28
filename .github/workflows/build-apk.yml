@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Fix Android SDK versions and JNI Bug
+      - name: Fix Android SDK versions and kill JNI bug
         run: |
           find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' {} +
           find /home/runner/.pub-cache/hosted -name "build.gradle" -type f -exec sed -i 's/compileSdk 33/compileSdk 34/g' {} +
@@ -44,26 +44,8 @@ jobs:
           sed -i 's/compileSdkVersion 33/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion 33/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           
-          # --- ХИРУРГИЧЕСКОЕ УДАЛЕНИЕ БАГА В JNI ---
-          cat << 'EOF' > fix_jni.dart
-          import 'dart:io';
-          void main() {
-            var dir = Directory('/home/runner/.pub-cache/hosted/pub.dev/');
-            if (!dir.existsSync()) return;
-            for (var d in dir.listSync()) {
-              if (d.path.contains('/jni-') && d is Directory) {
-                var file = File('${d.path}/android/build.gradle');
-                if (file.existsSync()) {
-                  var text = file.readAsStringSync();
-                  text = text.replaceAll(RegExp(r'kotlin\s*\{\s*jvmToolchain\(8\)\s*\}'), '');
-                  file.writeAsStringSync(text);
-                  print('✅ Успешно вырезали баг из JNI');
-                }
-              }
-            }
-          }
-          EOF
-          dart fix_jni.dart
+          # УБИЙЦА БАГА JNI (Надежный метод через Perl, который не ломает скобки)
+          find /home/runner/.pub-cache/hosted -path "*/jni-*/android/build.gradle" -exec perl -0777 -pi -e 's/kotlin\s*\{[^}]*\}//g' {} + || true
 
       # --- ЧИТАЕМ СЕКРЕТЫ И НАСТРАИВАЕМ ПОДПИСЬ (УНИВЕРСАЛЬНЫЙ МЕТОД) ---
       - name: Inject Secret Keys and Permanent Keystore
@@ -125,4 +107,3 @@ jobs:
         with:
           name: ${{ env.FINAL_ZIP_NAME }}
           path: build/app/outputs/flutter-apk/${{ env.FINAL_APK_NAME }}
-
