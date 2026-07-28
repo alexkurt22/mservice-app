@@ -27,9 +27,25 @@ jobs:
       - name: Generate system files
         run: flutter create --platforms=android .
         
-      - name: Fix Android Manifest for SMS
+      # --- ДИНАМИЧЕСКИ ДОБАВЛЯЕМ ПРАВА НА СМС, МИКРОФОН И КАМЕРУ ---
+      - name: Fix Android Manifest (Permissions & SMS)
         run: |
-          echo "import 'dart:io'; void main() { var f = File('android/app/src/main/AndroidManifest.xml'); var text = f.readAsStringSync(); text = text.replaceFirst('<application', '<queries><intent><action android:name=\"android.intent.action.VIEW\"/><data android:scheme=\"sms\"/></intent></queries><application'); f.writeAsStringSync(text); }" > fix_manifest.dart
+          cat << 'EOF' > fix_manifest.dart
+          import 'dart:io';
+          void main() {
+            var f = File('android/app/src/main/AndroidManifest.xml');
+            var text = f.readAsStringSync();
+            var additions = '''
+            <queries><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="sms"/></intent></queries>
+            <uses-permission android:name="android.permission.RECORD_AUDIO" />
+            <uses-permission android:name="android.permission.CAMERA" />
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+            <application
+            ''';
+            text = text.replaceFirst('<application', additions);
+            f.writeAsStringSync(text);
+          }
+          EOF
           dart fix_manifest.dart
 
       - name: Install dependencies
