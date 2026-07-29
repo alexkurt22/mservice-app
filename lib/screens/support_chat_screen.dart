@@ -23,13 +23,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   String? _myPhone;
   String? _roomId;
 
-  // --- МЕДИА И ЗАПИСЬ ---
   final ImagePicker _imagePicker = ImagePicker();
   FlutterSoundRecorder? _audioRecorder;
   bool _isRecording = false;
   String? _currentAudioPath;
   
-  // --- ВОСПРОИЗВЕДЕНИЕ ---
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingId;
 
@@ -92,7 +90,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     super.dispose();
   }
 
-  // --- ОТПРАВКА ТЕКСТА ---
   Future<void> _sendTextMessage() async {
     if (_controller.text.trim().isEmpty || _roomId == null) return;
     final text = _controller.text.trim();
@@ -100,10 +97,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     await _sendMessageToDb(text: text);
   }
 
-  // --- ОТПРАВКА ФОТО ---
   Future<void> _pickAndSendImage() async {
     try {
-      final pickedFile = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+      final pickedFile = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 40, maxWidth: 800, maxHeight: 800);
       if (pickedFile != null) {
         final bytes = await File(pickedFile.path).readAsBytes();
         final base64Image = base64Encode(bytes);
@@ -114,7 +110,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     }
   }
 
-  // --- ЗАПИСЬ АУДИО ---
   Future<void> _startRecording() async {
     var statusMicrophone = await Permission.microphone.request();
     if (statusMicrophone != PermissionStatus.granted) {
@@ -126,7 +121,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       final tempDir = await getTemporaryDirectory();
       _currentAudioPath = '${tempDir.path}/chat_audio_${DateTime.now().millisecondsSinceEpoch}.aac';
       
-      await _audioRecorder!.startRecorder(toFile: _currentAudioPath, codec: Codec.aacADTS);
+      await _audioRecorder!.startRecorder(toFile: _currentAudioPath, codec: Codec.aacADTS, bitRate: 16000, sampleRate: 16000);
       if (mounted) setState(() => _isRecording = true);
     } catch (e) {
       debugPrint('Ошибка старта записи: $e');
@@ -150,7 +145,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     }
   }
 
-  // --- ОБЩИЙ МЕТОД СОХРАНЕНИЯ В БАЗУ ---
   Future<void> _sendMessageToDb({required String text, String? imageBase64, String? audioBase64}) async {
     if (_roomId == null) return;
 
@@ -177,7 +171,6 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     }
   }
 
-  // --- ВОСПРОИЗВЕДЕНИЕ АУДИО ---
   Future<void> _playAudio(String messageId, String base64Audio) async {
     if (_currentlyPlayingId == messageId) {
       await _audioPlayer.pause();
@@ -210,11 +203,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     return DateFormat('dd.MM.yyyy').format(date);
   }
 
-  // --- ОТРИСОВКА ПУЗЫРЯ СООБЩЕНИЯ ---
   Widget _buildMessageBubble(Map<String, dynamic> data, String messageId, bool isMe, DateTime dt, bool isSending, bool isDark) {
-    final bubbleColor = isMe 
-        ? (isDark ? Colors.blueGrey[700] : Colors.blue[100]) 
-        : (isDark ? Colors.grey[800] : Colors.white);
+    final bubbleColor = isMe ? (isDark ? Colors.blueGrey[700] : Colors.blue[100]) : (isDark ? Colors.grey[800] : Colors.white);
     final textColor = isDark ? Colors.white : Colors.black87;
     final timeColor = isDark ? Colors.white54 : Colors.grey[600];
 
@@ -235,65 +225,27 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         child: Column(
           crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            
-            // Если есть картинка
             if (data['image_base64'] != null)
               GestureDetector(
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => Dialog(
-                      backgroundColor: Colors.transparent,
-                      insetPadding: const EdgeInsets.all(10),
-                      child: InteractiveViewer(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.memory(base64Decode(data['image_base64']), fit: BoxFit.contain),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(base64Decode(data['image_base64']), height: 150, width: double.infinity, fit: BoxFit.cover),
-                  ),
-                ),
+                onTap: () => showDialog(context: context, builder: (_) => Dialog(backgroundColor: Colors.transparent, child: InteractiveViewer(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(base64Decode(data['image_base64']), fit: BoxFit.contain))))),
+                child: Padding(padding: const EdgeInsets.only(bottom: 8.0), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(base64Decode(data['image_base64']), height: 150, width: double.infinity, fit: BoxFit.cover))),
               ),
-
-            // Если есть аудио
             if (data['audio_base64'] != null)
               Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.black26 : Colors.white54,
-                  borderRadius: BorderRadius.circular(12)
-                ),
+                margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: isDark ? Colors.black26 : Colors.white54, borderRadius: BorderRadius.circular(12)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     GestureDetector(
                       onTap: () => _playAudio(messageId, data['audio_base64']),
-                      child: CircleAvatar(
-                        backgroundColor: isMe ? Colors.blue[600] : Colors.orange,
-                        radius: 20,
-                        child: Icon(_currentlyPlayingId == messageId ? Icons.pause : Icons.play_arrow, color: Colors.white),
-                      ),
+                      child: CircleAvatar(backgroundColor: isMe ? Colors.blue[600] : Colors.orange, radius: 20, child: Icon(_currentlyPlayingId == messageId ? Icons.pause : Icons.play_arrow, color: Colors.white)),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        data['text'] ?? '🎤 Голосовое сообщение', 
-                        style: TextStyle(fontSize: 13, color: textColor, fontStyle: FontStyle.italic),
-                      ),
-                    ),
+                    Expanded(child: Text(data['text'] ?? '🎤 Голосовое сообщение', style: TextStyle(fontSize: 13, color: textColor, fontStyle: FontStyle.italic))),
                   ],
                 ),
               )
-            // Иначе просто текст
             else if (data['image_base64'] == null)
               Text(data['text'] ?? '', style: TextStyle(fontSize: 15, color: textColor)),
             
@@ -304,11 +256,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                 Text(isSending ? 'Отправка...' : DateFormat('HH:mm').format(dt), style: TextStyle(fontSize: 11, color: timeColor)),
                 if (isMe) ...[
                   const SizedBox(width: 4),
-                  Icon(
-                    isSending ? Icons.access_time : (data['is_read'] == true ? Icons.done_all : Icons.check), 
-                    size: 14, 
-                    color: isSending ? Colors.grey : (data['is_read'] == true ? (isDark ? Colors.blue[300] : Colors.blue[600]) : timeColor),
-                  ),
+                  Icon(isSending ? Icons.access_time : (data['is_read'] == true ? Icons.done_all : Icons.check), size: 14, color: isSending ? Colors.grey : (data['is_read'] == true ? (isDark ? Colors.blue[300] : Colors.blue[600]) : timeColor)),
                 ]
               ],
             ),
@@ -324,33 +272,20 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Чат с поддержкой', style: TextStyle(fontWeight: FontWeight.bold)), 
-        backgroundColor: isDark ? Colors.grey[900] : Colors.blueGrey[900], 
-        foregroundColor: Colors.white,
-        elevation: 1,
-      ),
+      appBar: AppBar(title: const Text('Чат с поддержкой', style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: isDark ? Colors.grey[900] : Colors.blueGrey[900], foregroundColor: Colors.white, elevation: 1),
       body: _roomId == null 
         ? const Center(child: CircularProgressIndicator())
         : Column(
             children: [
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('chat_rooms')
-                      .doc(_roomId)
-                      .collection('messages')
-                      .orderBy('created_at', descending: true)
-                      .snapshots(),
+                  stream: FirebaseFirestore.instance.collection('chat_rooms').doc(_roomId).collection('messages').orderBy('created_at', descending: true).snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                    
                     final messages = snapshot.data!.docs;
                     
                     return ListView.builder(
-                      reverse: true,
-                      padding: EdgeInsets.only(top: 10, bottom: MediaQuery.of(context).padding.bottom + 80.0),
-                      itemCount: messages.length,
+                      reverse: true, padding: EdgeInsets.only(top: 10, bottom: MediaQuery.of(context).padding.bottom + 80.0), itemCount: messages.length,
                       itemBuilder: (ctx, i) {
                         final data = messages[i].data() as Map<String, dynamic>;
                         final messageId = messages[i].id;
@@ -367,14 +302,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                         }
                         
                         bool showDate = false;
-                        if (i == messages.length - 1) {
-                          showDate = true; 
-                        } else if (!isSending) {
-                          final prevData = messages[i+1].data() as Map<String, dynamic>;
-                          final prevTs = prevData['created_at'] as Timestamp?;
-                          if (prevTs != null && ts != null) {
-                            if (prevTs.toDate().day != dt.day) showDate = true;
-                          }
+                        if (i == messages.length - 1) showDate = true; 
+                        else if (!isSending) {
+                          final prevTs = (messages[i+1].data() as Map<String, dynamic>)['created_at'] as Timestamp?;
+                          if (prevTs != null && prevTs.toDate().day != dt.day) showDate = true;
                         }
 
                         return Column(
@@ -385,19 +316,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                                 child: Row(
                                   children: [
                                     Expanded(child: Divider(color: isDark ? Colors.grey[700] : Colors.grey[300], thickness: 1)),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                        decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey[200], borderRadius: BorderRadius.circular(12)),
-                                        child: Text(_getDateSeparatorText(dt), style: TextStyle(color: isDark ? Colors.white70 : Colors.blueGrey, fontSize: 12, fontWeight: FontWeight.bold)),
-                                      ),
-                                    ),
+                                    Container(margin: const EdgeInsets.symmetric(horizontal: 12.0), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey[200], borderRadius: BorderRadius.circular(12)), child: Text(_getDateSeparatorText(dt), style: TextStyle(color: isDark ? Colors.white70 : Colors.blueGrey, fontSize: 12, fontWeight: FontWeight.bold))),
                                     Expanded(child: Divider(color: isDark ? Colors.grey[700] : Colors.grey[300], thickness: 1)),
                                   ],
                                 ),
                               ),
-                            
                             _buildMessageBubble(data, messageId, isMe, dt, isSending, isDark),
                           ],
                         );
@@ -407,68 +330,31 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                 ),
               ),
               
-              // --- ИНДИКАТОР ЗАПИСИ ---
               if (_isRecording)
-                Container(
-                  color: isDark ? Colors.red[900]?.withOpacity(0.5) : Colors.red[50],
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.mic, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Text('Идет запись... Отпустите для отправки', style: TextStyle(color: isDark ? Colors.red[200] : Colors.red[800], fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
+                Container(color: isDark ? Colors.red[900]?.withOpacity(0.5) : Colors.red[50], padding: const EdgeInsets.symmetric(vertical: 12), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.mic, color: Colors.red), const SizedBox(width: 8), Text('Идет запись... Отпустите для отправки', style: TextStyle(color: isDark ? Colors.red[200] : Colors.red[800], fontWeight: FontWeight.bold))])),
 
-              // --- ПОЛЕ ВВОДА ---
               SafeArea(
                 top: false,
                 child: Container(
                   padding: const EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
-                  ),
+                  decoration: BoxDecoration(color: Theme.of(context).cardColor, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))]),
                   child: Row(
                     children: [
-                      IconButton(
-                        icon: Icon(Icons.attach_file, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                        onPressed: _pickAndSendImage,
-                      ),
+                      IconButton(icon: Icon(Icons.attach_file, color: isDark ? Colors.grey[400] : Colors.grey[600]), onPressed: _pickAndSendImage),
                       Expanded(
                         child: TextField(
-                          controller: _controller, 
-                          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                          decoration: InputDecoration(
-                            hintText: 'Сообщение...', 
-                            hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
-                            filled: true,
-                            fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none)
-                          ),
+                          controller: _controller, style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                          decoration: InputDecoration(hintText: 'Сообщение...', hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey), filled: true, fillColor: isDark ? Colors.grey[800] : Colors.grey[100], contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none)),
                           onChanged: (text) => setState(() {}),
                         )
                       ),
                       const SizedBox(width: 8),
-                      
                       if (_controller.text.trim().isNotEmpty)
-                        CircleAvatar(
-                          radius: 22,
-                          backgroundColor: isDark ? Colors.blue[700] : Colors.blue[600], 
-                          child: IconButton(icon: const Icon(Icons.send, color: Colors.white, size: 20), onPressed: _sendTextMessage),
-                        )
+                        CircleAvatar(radius: 22, backgroundColor: isDark ? Colors.blue[700] : Colors.blue[600], child: IconButton(icon: const Icon(Icons.send, color: Colors.white, size: 20), onPressed: _sendTextMessage))
                       else
                         GestureDetector(
-                          onLongPress: _startRecording,
-                          onLongPressUp: _stopRecordingAndSend,
-                          child: CircleAvatar(
-                            radius: 22,
-                            backgroundColor: _isRecording ? Colors.red : (isDark ? Colors.blueGrey[700] : Colors.blueGrey[900]), 
-                            child: Icon(_isRecording ? Icons.stop : Icons.mic, color: Colors.white, size: 22),
-                          ),
+                          onLongPress: _startRecording, onLongPressUp: _stopRecordingAndSend,
+                          child: CircleAvatar(radius: 22, backgroundColor: _isRecording ? Colors.red : (isDark ? Colors.blueGrey[700] : Colors.blueGrey[900]), child: Icon(_isRecording ? Icons.stop : Icons.mic, color: Colors.white, size: 22)),
                         ),
                     ],
                   ),
