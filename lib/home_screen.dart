@@ -16,6 +16,12 @@ import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/store_screen.dart'; 
 
+// ИМПОРТЫ НОВЫХ ЭКРАНОВ ДЛЯ МЕНЮ
+import 'screens/reviews_screen.dart'; 
+import 'screens/about_screen.dart'; 
+import 'screens/contacts_screen.dart'; 
+import 'screens/faq_screen.dart'; 
+
 const String CURRENT_APP_VERSION = "1.0.0";
 
 class HomeScreen extends StatefulWidget {
@@ -51,13 +57,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final doc = await FirebaseFirestore.instance.collection('settings').doc('loyalty').get();
       if (doc.exists && doc.data()!.containsKey('max_discount_percent')) {
-        setState(() {
-          _maxDiscountPercentUI = doc.data()!['max_discount_percent'];
-        });
+        setState(() => _maxDiscountPercentUI = doc.data()!['max_discount_percent']);
       }
-    } catch (e) {
-      debugPrint('Ошибка загрузки настроек: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _addBonusHistory(String phone, int amount, String description) async {
@@ -149,9 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'created_at': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      if (welcomePoints > 0) {
-        await _addBonusHistory(_phone!, welcomePoints, 'Приветственный бонус 🎁');
-      }
+      if (welcomePoints > 0) await _addBonusHistory(_phone!, welcomePoints, 'Приветственный бонус 🎁');
     }
   }
 
@@ -207,10 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(backgroundColor: isDark ? Colors.red[900]?.withOpacity(0.5) : Colors.red[100], child: Icon(Icons.sos, color: isDark ? Colors.red[300] : Colors.red[700])),
                   title: Text('Вызвать мастера / SOS', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                   subtitle: Text('Сломалось устройство? Оставьте заявку', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
-                  onTap: () { 
-                    Navigator.pop(context); 
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen())); 
-                  },
+                  onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen())); },
                 ),
                 const SizedBox(height: 12),
 
@@ -219,10 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(backgroundColor: isDark ? Colors.orange[900]?.withOpacity(0.5) : Colors.orange[100], child: Icon(Icons.shopping_bag, color: isDark ? Colors.orange[300] : Colors.orange[700])),
                   title: Text('Магазин техники', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                   subtitle: Text('Новые и Б/У устройства', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
-                  onTap: () { 
-                    Navigator.pop(context); 
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())); 
-                  },
+                  onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())); },
                 ),
               ],
             ),
@@ -292,24 +286,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600]),
                     onPressed: () async {
                       setStateDialog(() => isSubmitting = true);
-                      
                       String clientName = data['client_name'] ?? 'Клиент';
-                      if (isAnonymous) {
-                         clientName = clientName.length > 2 ? '${clientName.substring(0, 1)}***' : 'Аноним';
-                      }
-
+                      if (isAnonymous) clientName = clientName.length > 2 ? '${clientName.substring(0, 1)}***' : 'Аноним';
                       try {
                         await FirebaseFirestore.instance.collection('reviews').add({
-                          'rating': rating,
-                          'text': commentController.text.trim(),
-                          'author_name': clientName,
-                          'device_type': data['device_type'] ?? 'Устройство',
-                          'created_at': FieldValue.serverTimestamp(),
-                          'is_approved': false, 
+                          'rating': rating, 'text': commentController.text.trim(),
+                          'author_name': clientName, 'device_type': data['device_type'] ?? 'Устройство',
+                          'created_at': FieldValue.serverTimestamp(), 'is_approved': false, 
                         });
-
                         await order.reference.update({'is_reviewed': true, 'review_rating': rating});
-
                         if (mounted) {
                            Navigator.pop(ctx);
                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Отзыв отправлен!'), backgroundColor: Colors.green));
@@ -338,25 +323,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- ЛОГИКА ЛАЙКОВ ---
   Future<void> _toggleLike(String docId, List<dynamic> likedBy) async {
     if (_phone == null) return;
-    
     final docRef = FirebaseFirestore.instance.collection('news_feed').doc(docId);
     if (likedBy.contains(_phone)) {
-      await docRef.update({
-        'liked_by': FieldValue.arrayRemove([_phone]),
-        'likes_count': FieldValue.increment(-1),
-      });
+      await docRef.update({'liked_by': FieldValue.arrayRemove([_phone]), 'likes_count': FieldValue.increment(-1)});
     } else {
-      await docRef.update({
-        'liked_by': FieldValue.arrayUnion([_phone]),
-        'likes_count': FieldValue.increment(1),
-      });
+      await docRef.update({'liked_by': FieldValue.arrayUnion([_phone]), 'likes_count': FieldValue.increment(1)});
     }
   }
 
-  // --- ЛОГИКА ОПРОСОВ ---
   Future<void> _voteInPoll(String docId, Map<String, dynamic> pollData, int optionIndex) async {
     if (_phone == null) return;
     List<dynamic> votedUsers = pollData['voted_users'] ?? [];
@@ -364,24 +340,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Вы уже проголосовали!')));
       return; 
     }
-
     List<dynamic> options = pollData['options'];
     options[optionIndex]['votes'] = (options[optionIndex]['votes'] ?? 0) + 1;
     votedUsers.add(_phone);
-
     await FirebaseFirestore.instance.collection('news_feed').doc(docId).update({
-      'poll.options': options,
-      'poll.voted_users': votedUsers,
-      'poll.total_votes': FieldValue.increment(1),
+      'poll.options': options, 'poll.voted_users': votedUsers, 'poll.total_votes': FieldValue.increment(1),
     });
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ваш голос учтен!'), backgroundColor: Colors.green));
   }
 
-  // --- ЭКРАН КОММЕНТАРИЕВ (ДЕРЕВО ОТВЕТОВ С ОБНОВЛЕНИЕМ СЧЕТЧИКА) ---
   void _showCommentsBottomSheet(String postId, bool isDark) {
     final TextEditingController commentController = TextEditingController();
     bool isSubmitting = false;
-
     String? replyToId;
     String? replyToName;
 
@@ -393,10 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              left: 16, right: 16, top: 16
-            ),
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 16, right: 16, top: 16),
             child: FractionallySizedBox(
               heightFactor: 0.85, 
               child: Column(
@@ -405,15 +372,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 16),
                   Text('Комментарии', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                   const Divider(),
-                  
-                  // СПИСОК КОММЕНТАРИЕВ (ДЕРЕВО)
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance.collection('news_feed').doc(postId).collection('comments').orderBy('created_at', descending: true).snapshots(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
+                        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                           return Center(
                             child: Column(
@@ -428,18 +391,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
 
                         final docs = snapshot.data!.docs;
-
                         List<QueryDocumentSnapshot> roots = [];
                         Map<String, List<QueryDocumentSnapshot>> replies = {};
 
                         for (var doc in docs) {
                           final data = doc.data() as Map<String, dynamic>;
                           final parentId = data['reply_to_id'] as String?;
-                          if (parentId == null) {
-                            roots.add(doc);
-                          } else {
-                            replies.putIfAbsent(parentId, () => []).add(doc);
-                          }
+                          if (parentId == null) { roots.add(doc); } else { replies.putIfAbsent(parentId, () => []).add(doc); }
                         }
 
                         replies.forEach((key, list) {
@@ -476,22 +434,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             
                             final author = cData['author_name'] ?? 'Пользователь';
                             final text = cData['text'] ?? '';
-                            
                             String timeStr = '';
-                            if (cData['created_at'] != null) {
-                              timeStr = DateFormat('dd.MM HH:mm').format((cData['created_at'] as Timestamp).toDate());
-                            }
+                            if (cData['created_at'] != null) timeStr = DateFormat('dd.MM HH:mm').format((cData['created_at'] as Timestamp).toDate());
 
                             double leftMargin = depth * 30.0;
                             if (leftMargin > 90.0) leftMargin = 90.0;
 
                             return GestureDetector(
-                              onTap: () {
-                                setModalState(() {
-                                  replyToId = cDoc.id;
-                                  replyToName = author;
-                                });
-                              },
+                              onTap: () => setModalState(() { replyToId = cDoc.id; replyToName = author; }),
                               child: Container(
                                 margin: EdgeInsets.only(left: leftMargin, bottom: 8),
                                 padding: const EdgeInsets.all(12),
@@ -537,13 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           const Icon(Icons.reply, color: Colors.blue),
                           const SizedBox(width: 8),
                           Expanded(child: Text('Ответ пользователю: $replyToName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue))),
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () => setModalState(() {
-                              replyToId = null;
-                              replyToName = null;
-                            }),
-                          )
+                          IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setModalState(() { replyToId = null; replyToName = null; }))
                         ],
                       ),
                     ),
@@ -561,12 +505,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               decoration: InputDecoration(
                                 hintText: replyToName != null ? 'Написать ответ...' : 'Написать комментарий...',
                                 hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
-                                filled: true,
-                                fillColor: isDark ? Colors.grey[800] : Colors.grey[200],
-                                border: OutlineInputBorder(
-                                  borderRadius: replyToName != null ? const BorderRadius.vertical(bottom: Radius.circular(16)) : BorderRadius.circular(24), 
-                                  borderSide: BorderSide.none
-                                ),
+                                filled: true, fillColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                                border: OutlineInputBorder(borderRadius: replyToName != null ? const BorderRadius.vertical(bottom: Radius.circular(16)) : BorderRadius.circular(24), borderSide: BorderSide.none),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               ),
                             ),
@@ -587,25 +527,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                         'author_name': _clientName ?? 'Клиент',
                                         'created_at': FieldValue.serverTimestamp(),
                                       };
-
                                       if (replyToId != null) {
                                         commentData['reply_to_id'] = replyToId;
                                         commentData['reply_to_name'] = replyToName;
                                       }
 
-                                      // Добавляем комментарий
                                       await FirebaseFirestore.instance.collection('news_feed').doc(postId).collection('comments').add(commentData);
-                                      
-                                      // ИЗМЕНЕНИЕ: Увеличиваем счетчик комментариев у самого поста
-                                      await FirebaseFirestore.instance.collection('news_feed').doc(postId).update({
-                                        'comments_count': FieldValue.increment(1)
-                                      });
+                                      await FirebaseFirestore.instance.collection('news_feed').doc(postId).update({'comments_count': FieldValue.increment(1)});
                                       
                                       commentController.clear();
-                                      setModalState(() {
-                                        replyToId = null;
-                                        replyToName = null;
-                                      });
+                                      setModalState(() { replyToId = null; replyToName = null; });
                                     } catch (e) {
                                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
                                     } finally {
@@ -631,34 +562,24 @@ class _HomeScreenState extends State<HomeScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('news_feed').snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
-        }
-        
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink(); 
-        }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink(); 
 
         List<QueryDocumentSnapshot> rawDocs = snapshot.data!.docs;
-
         rawDocs.sort((a, b) {
           final dataA = a.data() as Map<String, dynamic>;
           final dataB = b.data() as Map<String, dynamic>;
           Timestamp? timeA = dataA['created_at'] as Timestamp?;
           Timestamp? timeB = dataB['created_at'] as Timestamp?;
-          
           if (timeA == null && timeB == null) return 0;
           if (timeA == null) return 1;
           if (timeB == null) return -1;
-          
           return timeB.compareTo(timeA); 
         });
 
         final docs = rawDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          if (data.containsKey('is_active') && data['is_active'] == false) {
-            return false; 
-          }
+          if (data.containsKey('is_active') && data['is_active'] == false) return false; 
           return true; 
         }).toList();
         
@@ -683,7 +604,6 @@ class _HomeScreenState extends State<HomeScreen> {
               final allowComments = data['allow_comments'] ?? true;
               
               final likesCount = data['likes_count'] ?? 0;
-              // ИЗМЕНЕНИЕ: Читаем счетчик комментариев из базы
               final commentsCount = data['comments_count'] ?? 0;
 
               final likedBy = data['liked_by'] as List<dynamic>? ?? [];
@@ -711,7 +631,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Шапка карточки
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Row(
@@ -719,10 +638,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: type == 'Акция' ? Colors.orange[100] : (type == 'Конкурс' ? Colors.pink[100] : Colors.blue[100]),
-                              borderRadius: BorderRadius.circular(8)
-                            ),
+                            decoration: BoxDecoration(color: type == 'Акция' ? Colors.orange[100] : (type == 'Конкурс' ? Colors.pink[100] : Colors.blue[100]), borderRadius: BorderRadius.circular(8)),
                             child: Text(type, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: type == 'Акция' ? Colors.orange[900] : (type == 'Конкурс' ? Colors.pink[900] : Colors.blue[900]))),
                           ),
                           Text(dateStr, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
@@ -730,11 +646,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
 
-                    // Картинка
                     if (imageBase64 != null && imageBase64.toString().isNotEmpty)
                       Image.memory(base64Decode(imageBase64), width: double.infinity, height: 200, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const SizedBox(height: 50, child: Center(child: Text('Ошибка фото')))),
                     
-                    // Заголовок и Текст
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
@@ -747,7 +661,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
 
-                    // ОПРОС
                     if (hasPoll)
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -783,25 +696,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ],
                                     )
                                   : OutlinedButton(
-                                      style: OutlinedButton.styleFrom(
-                                        minimumSize: const Size(double.infinity, 40),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
+                                      style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 40), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                                       onPressed: () => _voteInPoll(doc.id, poll, idx),
                                       child: Text(opt['text']),
                                     ),
                               );
                             }).toList(),
                             if (hasVoted)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8.0),
-                                child: Text('Всего голосов: ${poll['total_votes']}', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                              )
+                              Padding(padding: const EdgeInsets.only(top: 8.0), child: Text('Всего голосов: ${poll['total_votes']}', style: TextStyle(fontSize: 12, color: Colors.grey[500])))
                           ],
                         ),
                       ),
 
-                    // ЛАЙКИ И КОММЕНТАРИИ (ТЕПЕРЬ С ЦИФРАМИ)
                     Container(
                       decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[200]!))),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -838,6 +744,65 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- БОКОВОЕ МЕНЮ (С НОВЫМИ ПУНКТАМИ) ---
+  Widget _buildDrawer(bool isDark) {
+    return Drawer(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: BoxDecoration(color: isDark ? Colors.blueGrey[900] : Colors.blueGrey[800]),
+            accountName: Text(_clientName ?? 'Клиент', style: const TextStyle(fontWeight: FontWeight.bold)),
+            accountEmail: Text(_phone ?? ''),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.person, color: Colors.blueGrey, size: 40),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.star_rate, color: Colors.orange),
+            title: const Text('Отзывы клиентов', style: TextStyle(fontWeight: FontWeight.bold)),
+            onTap: () {
+              Navigator.pop(context); 
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewsScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.info_outline, color: Colors.blue),
+            title: const Text('О нас', style: TextStyle(fontWeight: FontWeight.bold)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.contact_phone, color: Colors.green),
+            title: const Text('Контакты и Карта', style: TextStyle(fontWeight: FontWeight.bold)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactsScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.help_outline, color: Colors.purple),
+            title: const Text('Частые вопросы (FAQ)', style: TextStyle(fontWeight: FontWeight.bold)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const FaqScreen()));
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.exit_to_app, color: Colors.red),
+            title: const Text('Выйти', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            onTap: () => _forceLogout('Вы вышли из аккаунта'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHomeTab(bool isDark) {
     return Stack(
       children: [
@@ -846,15 +811,10 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             if (_phone != null)
               StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('status', whereIn: ['new', 'awaiting_approval', 'in_progress', 'completed']).snapshots(),
+                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('status', whereIn: ['new', 'awaiting_approval', 'in_progress']).snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox.shrink(); 
-                  final docs = snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    if (data['status'] == 'completed' && data['is_reviewed'] == true) return false;
-                    return true;
-                  }).toList();
-                  if (docs.isEmpty) return const SizedBox.shrink();
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink(); 
+                  final docs = snapshot.data!.docs;
 
                   return Column(
                     children: docs.map((doc) {
@@ -864,7 +824,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       return GestureDetector(
                         onTap: () {
-                           if (status != 'completed') Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+                           Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
                         },
                         child: Container(
                           margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
@@ -873,35 +833,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             gradient: LinearGradient(colors: [(statusInfo['color'] as Color).withOpacity(0.8), statusInfo['color']], begin: Alignment.topLeft, end: Alignment.bottomRight),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Row(
-                                children: [
-                                  CircleAvatar(backgroundColor: Colors.white24, child: Icon(statusInfo['icon'], color: Colors.white)),
-                                  const SizedBox(width: 16),
-                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                    Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                                    Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
-                                  ])),
-                                  if (status != 'completed') const Icon(Icons.chevron_right, color: Colors.white),
-                                ],
-                              ),
-                              if (status == 'completed') ...[
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.green[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                        onPressed: () => _showReviewDialog(doc, data), icon: const Icon(Icons.star, color: Colors.orange), label: const Text('Оставить отзыв'),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () async { await doc.reference.update({'is_reviewed': true}); }),
-                                  ],
-                                )
-                              ]
+                              CircleAvatar(backgroundColor: Colors.white24, child: Icon(statusInfo['icon'], color: Colors.white)),
+                              const SizedBox(width: 16),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              ])),
+                              const Icon(Icons.chevron_right, color: Colors.white),
                             ],
                           ),
                         ),
@@ -953,6 +893,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      drawer: _buildDrawer(isDark),
       appBar: AppBar(
         backgroundColor: Theme.of(context).cardColor, 
         elevation: 1,
