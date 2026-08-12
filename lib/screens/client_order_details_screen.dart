@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/push_service.dart';
 
 class ClientOrderDetailsScreen extends StatefulWidget {
   final QueryDocumentSnapshot order;
@@ -260,6 +261,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                           }
                           setState(() => _isLoading = true);
                           final selectedOpt = options[_selectedOption!];
+                          
                           await widget.order.reference.update({
                             'status': 'in_progress',
                             'price': selectedOpt['price'],
@@ -267,6 +269,13 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                             'selected_option_index': _selectedOption,
                             'has_unread_update': true,
                           });
+                          
+                          // ОТПРАВКА ПУША АДМИНУ
+                          PushService.sendPushToAdmins(
+                            'Ремонт согласован!',
+                            'Клиент ${widget.data['client_name']} согласился на ремонт: ${selectedOpt['description']} за ${selectedOpt['price']} TMT.',
+                          );
+
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ремонт согласован!'), backgroundColor: Colors.green));
                             Navigator.pop(context);
@@ -282,6 +291,13 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                         onPressed: () async {
                           setState(() => _isLoading = true);
                           await widget.order.reference.update({'status': 'canceled', 'has_unread_update': true});
+                          
+                          // ОТПРАВКА ПУША АДМИНУ ОБ ОТМЕНЕ
+                          PushService.sendPushToAdmins(
+                            'Отказ от ремонта',
+                            'Клиент ${widget.data['client_name']} отменил заявку на ${widget.data['device_type']}.',
+                          );
+
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Заказ отменен')));
                             Navigator.pop(context);
