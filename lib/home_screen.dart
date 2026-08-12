@@ -377,7 +377,260 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ваш голос учтен!'), backgroundColor: Colors.green));
   }
 
-  // --- ИСПРАВЛЕННАЯ ЛЕНТА НОВОСТЕЙ (БЕЗ ЖЕСТКИХ ФИЛЬТРОВ БД) ---
+  // --- ЭКРАН КОММЕНТАРИЕВ (ДЕРЕВО ОТВЕТОВ) ---
+  void _showCommentsBottomSheet(String postId, bool isDark) {
+    final TextEditingController commentController = TextEditingController();
+    bool isSubmitting = false;
+
+    String? replyToId;
+    String? replyToName;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 16, right: 16, top: 16
+            ),
+            child: FractionallySizedBox(
+              heightFactor: 0.85, 
+              child: Column(
+                children: [
+                  Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(height: 16),
+                  Text('Комментарии', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  const Divider(),
+                  
+                  // СПИСОК КОММЕНТАРИЕВ (ДЕРЕВО)
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      // Берем все комменты. Сортируем по дате создания.
+                      stream: FirebaseFirestore.instance.collection('news_feed').doc(postId).collection('comments').orderBy('created_at', descending: true).snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey[400]),
+                                const SizedBox(height: 16),
+                                Text('Пока нет комментариев.\nБудьте первым!', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[500])),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final docs = snapshot.data!.docs;
+
+                        // 1. Разделяем на главные комментарии и ответы
+                        List<QueryDocumentSnapshot> roots = [];
+                        Map<String, List<QueryDocumentSnapshot>> replies = {};
+
+                        for (var doc in docs) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final parentId = data['reply_to_id'] as String?;
+                          if (parentId == null) {
+                            roots.add(doc);
+                          } else {
+                            replies.putIfAbsent(parentId, () => []).add(doc);
+                          }
+                        }
+
+                        // Сортируем ответы, чтобы старые были сверху (хронология переписки)
+                        replies.forEach((key, list) {
+                          list.sort((a, b) {
+                            final tA = (a.data() as Map<String, dynamic>)['created_at'] as Timestamp?;
+                            final tB = (b.data() as Map<String, dynamic>)['created_at'] as Timestamp?;
+                            if (tA == null || tB == null) return 0;
+                            return tA.compareTo(tB); 
+                          });
+                        });
+
+                        // 2. Выстраиваем плоское дерево
+                        List<Map<String, dynamic>> flatTree = [];
+                        void buildTree(String parentId, int depth) {
+                          if (replies.containsKey(parentId)) {
+                            for (var reply in replies[parentId]!) {
+                              flatTree.add({'doc': reply, 'depth': depth});
+                              buildTree(reply.id, depth + 1);
+                            }
+                          }
+                        }
+
+                        // Заполняем список (Корни идут первыми)
+                        for (var root in roots) {
+                          flatTree.add({'doc': root, 'depth': 0});
+                          buildTree(root.id, 1);
+                        }
+
+                        return ListView.builder(
+                          itemCount: flatTree.length,
+                          itemBuilder: (context, index) {
+                            final item = flatTree[index];
+                            final cDoc = item['doc'] as QueryDocumentSnapshot;
+                            final depth = item['depth'] as int;
+                            final cData = cDoc.data() as Map<String, dynamic>;
+                            
+                            final author = cData['author_name'] ?? 'Пользователь';
+                            final text = cData['text'] ?? '';
+                            
+                            String timeStr = '';
+                            if (cData['created_at'] != null) {
+                              timeStr = DateFormat('dd.MM HH:mm').format((cData['created_at'] as Timestamp).toDate());
+                            }
+
+                            // Ограничиваем отступ, чтобы комменты не улетали за край экрана
+                            double leftMargin = depth * 30.0;
+                            if (leftMargin > 90.0) leftMargin = 90.0;
+
+                            return GestureDetector(
+                              onTap: () {
+                                setModalState(() {
+                                  replyToId = cDoc.id;
+                                  replyToName = author;
+                                });
+                              },
+                              child: Container(
+                                margin: EdgeInsets.only(left: leftMargin, bottom: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: replyToId == cDoc.id ? Colors.blue : Colors.transparent, width: 1.5)
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            if (depth > 0) const Icon(Icons.subdirectory_arrow_right, size: 14, color: Colors.blueGrey),
+                                            if (depth > 0) const SizedBox(width: 4),
+                                            Text(author, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700])),
+                                          ],
+                                        ),
+                                        Text(timeStr, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(text, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                        );
+                      }
+                    )
+                  ),
+                  
+                  // ПЛАШКА ОТВЕТА (ЕСЛИ ВЫБРАН КОММЕНТАРИЙ)
+                  if (replyToName != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.blue[50], borderRadius: const BorderRadius.vertical(top: Radius.circular(12))),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.reply, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text('Ответ пользователю: $replyToName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue))),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () => setModalState(() {
+                              replyToId = null;
+                              replyToName = null;
+                            }),
+                          )
+                        ],
+                      ),
+                    ),
+
+                  // ПОЛЕ ВВОДА КОММЕНТАРИЯ
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0, top: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: commentController,
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                              decoration: InputDecoration(
+                                hintText: replyToName != null ? 'Написать ответ...' : 'Написать комментарий...',
+                                hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
+                                filled: true,
+                                fillColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                                border: OutlineInputBorder(
+                                  borderRadius: replyToName != null ? const BorderRadius.vertical(bottom: Radius.circular(16)) : BorderRadius.circular(24), 
+                                  borderSide: BorderSide.none
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          isSubmitting 
+                            ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                            : CircleAvatar(
+                                backgroundColor: Colors.blue[600],
+                                child: IconButton(
+                                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                                  onPressed: () async {
+                                    if (commentController.text.trim().isEmpty) return;
+                                    setModalState(() => isSubmitting = true);
+                                    try {
+                                      Map<String, dynamic> commentData = {
+                                        'text': commentController.text.trim(),
+                                        'author_name': _clientName ?? 'Клиент',
+                                        'created_at': FieldValue.serverTimestamp(),
+                                      };
+
+                                      // Привязываем ID родительского комментария
+                                      if (replyToId != null) {
+                                        commentData['reply_to_id'] = replyToId;
+                                        commentData['reply_to_name'] = replyToName;
+                                      }
+
+                                      await FirebaseFirestore.instance.collection('news_feed').doc(postId).collection('comments').add(commentData);
+                                      
+                                      commentController.clear();
+                                      setModalState(() {
+                                        replyToId = null;
+                                        replyToName = null;
+                                      });
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                                    } finally {
+                                      setModalState(() => isSubmitting = false);
+                                    }
+                                  }
+                                )
+                              )
+                        ],
+                      ),
+                    )
+                  )
+                ],
+              )
+            )
+          );
+        }
+      )
+    );
+  }
+
+  // --- ЛЕНТА НОВОСТЕЙ (ДИНАМИЧЕСКАЯ ИЗ БАЗЫ - ИСПРАВЛЕННАЯ) ---
   Widget _buildNewsFeed(bool isDark) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('news_feed').snapshots(),
@@ -390,10 +643,8 @@ class _HomeScreenState extends State<HomeScreen> {
           return const SizedBox.shrink(); 
         }
 
-        // 1. Получаем все документы
         List<QueryDocumentSnapshot> rawDocs = snapshot.data!.docs;
 
-        // 2. Сортируем локально (новые сверху). Если даты нет, кидаем вниз.
         rawDocs.sort((a, b) {
           final dataA = a.data() as Map<String, dynamic>;
           final dataB = b.data() as Map<String, dynamic>;
@@ -404,10 +655,9 @@ class _HomeScreenState extends State<HomeScreen> {
           if (timeA == null) return 1;
           if (timeB == null) return -1;
           
-          return timeB.compareTo(timeA); // descending
+          return timeB.compareTo(timeA); 
         });
 
-        // 3. Фильтруем скрытые (где явно стоит is_active = false)
         final docs = rawDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           if (data.containsKey('is_active') && data['is_active'] == false) {
@@ -493,7 +743,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                           const SizedBox(height: 8),
-                          Text(content, maxLines: 4, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, height: 1.4, color: isDark ? Colors.grey[300] : Colors.black87)),
+                          Text(content, style: TextStyle(fontSize: 14, height: 1.4, color: isDark ? Colors.grey[300] : Colors.black87)),
                         ],
                       ),
                     ),
@@ -552,7 +802,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
 
-                    // ЛАЙКИ И КОММЕНТАРИИ (ИСПРАВЛЕНО!)
+                    // ЛАЙКИ И КОММЕНТАРИИ
                     Container(
                       decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[200]!))),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -570,11 +820,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                           if (allowComments)
                             TextButton.icon(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Комментарии откроются в следующем обновлении!')));
-                              },
+                              onPressed: () => _showCommentsBottomSheet(doc.id, isDark),
                               icon: const Icon(Icons.chat_bubble_outline, color: Colors.blue),
-                              label: const Text('Обсудить', style: TextStyle(color: Colors.blue)),
+                              label: const Text('Комментарии', style: TextStyle(color: Colors.blue)),
                             )
                           else
                             const SizedBox.shrink(),
@@ -591,71 +839,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildReviewsCarousel(bool isDark) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('reviews').where('is_approved', isEqualTo: true).snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Column(
-            children: [
-              Icon(Icons.forum, size: 64, color: isDark ? Colors.grey[700] : Colors.grey[300]),
-              const SizedBox(height: 16),
-              Text('Здесь будут отзывы', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[500], fontSize: 16)),
-            ],
-          );
-        }
-
-        var docs = snapshot.data!.docs;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text('Отзывы клиентов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey)),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 160,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: docs.length,
-                itemBuilder: (context, index) {
-                  final data = docs[index].data() as Map<String, dynamic>;
-                  return Container(
-                    width: 280, 
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor, 
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(data['author_name'] ?? 'Клиент', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87)),
-                            Row(children: List.generate(5, (starIdx) => Icon(starIdx < (data['rating'] ?? 5) ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.orangeAccent, size: 16)))
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(data['device_type'] ?? '', style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[500], fontSize: 11)),
-                        const SizedBox(height: 8),
-                        Expanded(child: Text(data['text'] ?? '', maxLines: 4, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black87))),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   Widget _buildHomeTab(bool isDark) {
     return Stack(
@@ -731,11 +914,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               
               const SizedBox(height: 24),
-              _buildNewsFeed(isDark), // Вызов исправленной ленты
-
-              const SizedBox(height: 40),
-              _buildReviewsCarousel(isDark), // Карусель отзывов под лентой
-              const SizedBox(height: 40),
+              _buildNewsFeed(isDark), 
           ],
         ),
         if (_phone != null)
@@ -861,4 +1040,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
