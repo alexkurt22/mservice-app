@@ -377,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ваш голос учтен!'), backgroundColor: Colors.green));
   }
 
-  // --- ЭКРАН КОММЕНТАРИЕВ (ДЕРЕВО ОТВЕТОВ) ---
+  // --- ЭКРАН КОММЕНТАРИЕВ (ДЕРЕВО ОТВЕТОВ С ОБНОВЛЕНИЕМ СЧЕТЧИКА) ---
   void _showCommentsBottomSheet(String postId, bool isDark) {
     final TextEditingController commentController = TextEditingController();
     bool isSubmitting = false;
@@ -409,7 +409,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   // СПИСОК КОММЕНТАРИЕВ (ДЕРЕВО)
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
-                      // Берем все комменты. Сортируем по дате создания.
                       stream: FirebaseFirestore.instance.collection('news_feed').doc(postId).collection('comments').orderBy('created_at', descending: true).snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -430,7 +429,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         final docs = snapshot.data!.docs;
 
-                        // 1. Разделяем на главные комментарии и ответы
                         List<QueryDocumentSnapshot> roots = [];
                         Map<String, List<QueryDocumentSnapshot>> replies = {};
 
@@ -444,7 +442,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           }
                         }
 
-                        // Сортируем ответы, чтобы старые были сверху (хронология переписки)
                         replies.forEach((key, list) {
                           list.sort((a, b) {
                             final tA = (a.data() as Map<String, dynamic>)['created_at'] as Timestamp?;
@@ -454,7 +451,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           });
                         });
 
-                        // 2. Выстраиваем плоское дерево
                         List<Map<String, dynamic>> flatTree = [];
                         void buildTree(String parentId, int depth) {
                           if (replies.containsKey(parentId)) {
@@ -465,7 +461,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           }
                         }
 
-                        // Заполняем список (Корни идут первыми)
                         for (var root in roots) {
                           flatTree.add({'doc': root, 'depth': 0});
                           buildTree(root.id, 1);
@@ -487,7 +482,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               timeStr = DateFormat('dd.MM HH:mm').format((cData['created_at'] as Timestamp).toDate());
                             }
 
-                            // Ограничиваем отступ, чтобы комменты не улетали за край экрана
                             double leftMargin = depth * 30.0;
                             if (leftMargin > 90.0) leftMargin = 90.0;
 
@@ -534,7 +528,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     )
                   ),
                   
-                  // ПЛАШКА ОТВЕТА (ЕСЛИ ВЫБРАН КОММЕНТАРИЙ)
                   if (replyToName != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -555,7 +548,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
 
-                  // ПОЛЕ ВВОДА КОММЕНТАРИЯ
                   SafeArea(
                     top: false,
                     child: Padding(
@@ -596,13 +588,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                         'created_at': FieldValue.serverTimestamp(),
                                       };
 
-                                      // Привязываем ID родительского комментария
                                       if (replyToId != null) {
                                         commentData['reply_to_id'] = replyToId;
                                         commentData['reply_to_name'] = replyToName;
                                       }
 
+                                      // Добавляем комментарий
                                       await FirebaseFirestore.instance.collection('news_feed').doc(postId).collection('comments').add(commentData);
+                                      
+                                      // ИЗМЕНЕНИЕ: Увеличиваем счетчик комментариев у самого поста
+                                      await FirebaseFirestore.instance.collection('news_feed').doc(postId).update({
+                                        'comments_count': FieldValue.increment(1)
+                                      });
                                       
                                       commentController.clear();
                                       setModalState(() {
@@ -630,7 +627,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- ЛЕНТА НОВОСТЕЙ (ДИНАМИЧЕСКАЯ ИЗ БАЗЫ - ИСПРАВЛЕННАЯ) ---
   Widget _buildNewsFeed(bool isDark) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('news_feed').snapshots(),
@@ -687,6 +683,9 @@ class _HomeScreenState extends State<HomeScreen> {
               final allowComments = data['allow_comments'] ?? true;
               
               final likesCount = data['likes_count'] ?? 0;
+              // ИЗМЕНЕНИЕ: Читаем счетчик комментариев из базы
+              final commentsCount = data['comments_count'] ?? 0;
+
               final likedBy = data['liked_by'] as List<dynamic>? ?? [];
               final isLikedByMe = _phone != null && likedBy.contains(_phone);
               
@@ -802,7 +801,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
 
-                    // ЛАЙКИ И КОММЕНТАРИИ
+                    // ЛАЙКИ И КОММЕНТАРИИ (ТЕПЕРЬ С ЦИФРАМИ)
                     Container(
                       decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[200]!))),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -822,7 +821,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             TextButton.icon(
                               onPressed: () => _showCommentsBottomSheet(doc.id, isDark),
                               icon: const Icon(Icons.chat_bubble_outline, color: Colors.blue),
-                              label: const Text('Комментарии', style: TextStyle(color: Colors.blue)),
+                              label: Text('Комментарии' + (commentsCount > 0 ? ' ($commentsCount)' : ''), style: const TextStyle(color: Colors.blue)),
                             )
                           else
                             const SizedBox.shrink(),
@@ -838,7 +837,6 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
-
 
   Widget _buildHomeTab(bool isDark) {
     return Stack(
@@ -1040,3 +1038,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
