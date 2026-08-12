@@ -8,14 +8,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 
-// ПРАВИЛЬНЫЕ ПУТИ ИМПОРТОВ
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
-import 'screens/store_screen.dart'; // <--- НОВЫЙ ИМПОРТ МАГАЗИНА
+import 'screens/store_screen.dart'; 
 
 const String CURRENT_APP_VERSION = "1.0.0";
 
@@ -219,10 +218,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.orange[900]?.withOpacity(0.3) : Colors.orange[50],
                   leading: CircleAvatar(backgroundColor: isDark ? Colors.orange[900]?.withOpacity(0.5) : Colors.orange[100], child: Icon(Icons.shopping_bag, color: isDark ? Colors.orange[300] : Colors.orange[700])),
                   title: Text('Магазин техники', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                  subtitle: Text('Б/У и новые устройства', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
+                  subtitle: Text('Новые и Б/У устройства', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
                   onTap: () { 
                     Navigator.pop(context); 
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen()));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())); 
                   },
                 ),
               ],
@@ -553,9 +552,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
 
-                    // ЛАЙКИ И КОММЕНТАРИИ
+                    // ЛАЙКИ И КОММЕНТАРИИ (ИСПРАВЛЕНО!)
                     Container(
-                      decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[200]!)))),
+                      decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[200]!))),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -862,3 +861,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
