@@ -37,7 +37,11 @@ class FaqScreen extends StatelessWidget {
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 color: Theme.of(context).cardColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey.shade200)),
+                // ИСПРАВЛЕНА СТРОКА НИЖЕ (side: BorderSide вместо border: Border.all)
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12), 
+                  side: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey.shade200)
+                ),
                 child: ExpansionTile(
                   iconColor: Colors.blue,
                   title: Text(item['question'] ?? 'Вопрос', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
@@ -59,4 +63,3 @@ class FaqScreen extends StatelessWidget {
     );
   }
 }
-
