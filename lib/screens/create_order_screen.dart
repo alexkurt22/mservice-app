@@ -4,15 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'support_chat_screen.dart';
+import '../services/push_service.dart';
 
 class CreateOrderScreen extends StatefulWidget {
   const CreateOrderScreen({super.key});
 
   @override
-  _CreateOrderScreenState createState() => _CreateOrderScreenState();
+  State<CreateOrderScreen> createState() => _CreateOrderScreenState();
 }
 
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
@@ -40,27 +39,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   // --- МЕДИА ФАЙЛЫ ---
   File? _attachedImage;
-  String? _attachedAudioPath;
-  bool _isRecording = false;
-  
-  FlutterSoundRecorder? _audioRecorder;
   final ImagePicker _imagePicker = ImagePicker();
-
-  @override
-  void initState() {
-    super.initState();
-    _initRecorder();
-  }
-
-  Future<void> _initRecorder() async {
-    _audioRecorder = FlutterSoundRecorder();
-    await _audioRecorder!.openRecorder();
-  }
 
   @override
   void dispose() {
     _problemController.dispose();
-    _audioRecorder?.closeRecorder();
     super.dispose();
   }
 
@@ -76,7 +59,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         setState(() => _attachedImage = File(pickedFile.path));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка фото: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка фото: $e')));
     }
   }
 
@@ -109,53 +92,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // --- ЛОГИКА АУДИО (ИСПРАВЛЕНО ДЛЯ FLUTTER_SOUND) ---
-  Future<void> _toggleRecording() async {
-    try {
-      if (_isRecording) {
-        final path = await _audioRecorder!.stopRecorder();
-        setState(() {
-          _isRecording = false;
-          _attachedAudioPath = path;
-        });
-      } else {
-        var status = await Permission.microphone.request();
-        if (status != PermissionStatus.granted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет разрешения на микрофон!')));
-          return;
-        }
-
-        if (_attachedAudioPath != null) {
-          final oldFile = File(_attachedAudioPath!);
-          if (oldFile.existsSync()) oldFile.deleteSync();
-        }
-
-        final tempDir = Directory.systemTemp.path;
-        final audioPath = '$tempDir/audio_${DateTime.now().millisecondsSinceEpoch}.aac';
-        
-        await _audioRecorder!.startRecorder(
-          toFile: audioPath,
-          codec: Codec.aacADTS,
-        );
-        
-        setState(() {
-          _isRecording = true;
-          _attachedAudioPath = null;
-        });
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка аудио: $e')));
-      setState(() {
-          _isRecording = false;
-      });
-    }
-  }
-
   // --- ОТПРАВКА ---
   Future<void> _submitOrder() async {
-    if (_problemController.text.trim().isEmpty && _attachedImage == null && _attachedAudioPath == null) {
+    if (_problemController.text.trim().isEmpty && _attachedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пожалуйста, опишите проблему (текстом, фото или голосовым)'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Пожалуйста, опишите проблему или прикрепите фото'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -168,17 +109,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final clientName = prefs.getString('client_name') ?? 'Неизвестный пользователь';
 
       String? imageBase64;
-      String? audioBase64;
 
       if (_attachedImage != null) {
         final bytes = await _attachedImage!.readAsBytes();
         imageBase64 = base64Encode(bytes);
-      }
-
-      if (_attachedAudioPath != null) {
-        final audioFile = File(_attachedAudioPath!);
-        final bytes = await audioFile.readAsBytes();
-        audioBase64 = base64Encode(bytes);
       }
 
       await FirebaseFirestore.instance.collection('orders').add({
@@ -189,11 +123,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         'problem': _problemController.text.trim(),
         'payment_method': _selectedPaymentMethod,
         'image_base64': imageBase64,
-        'audio_base64': audioBase64,
         'status': 'new',
         'created_at': FieldValue.serverTimestamp(),
         'has_unread_update': false,
       });
+
+      // Отправляем PUSH-уведомление администраторам
+      PushService.sendPushToAdmins(
+        'Новая заявка!', 
+        'Клиент $clientName сдал устройство "$_selectedDeviceType" в ремонт.'
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -365,40 +304,21 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     ),
                   ),
 
-                  // ПРЕДПРОСМОТР ПРИКРЕПЛЕННЫХ ФАЙЛОВ
-                  if (_attachedImage != null || _attachedAudioPath != null)
+                  // ПРЕДПРОСМОТР ПРИКРЕПЛЕННОГО ФОТО
+                  if (_attachedImage != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Column(
-                        children: [
-                          if (_attachedImage != null)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(_attachedImage!, width: 40, height: 40, fit: BoxFit.cover),
-                              ),
-                              title: const Text('Фото прикреплено', style: TextStyle(fontSize: 14)),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.close, color: Colors.red),
-                                onPressed: () => setState(() => _attachedImage = null),
-                              ),
-                            ),
-                          if (_attachedAudioPath != null)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const CircleAvatar(backgroundColor: Colors.orange, child: Icon(Icons.audiotrack, color: Colors.white, size: 20)),
-                              title: const Text('Голосовое сообщение', style: TextStyle(fontSize: 14)),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.close, color: Colors.red),
-                                onPressed: () {
-                                  final f = File(_attachedAudioPath!);
-                                  if (f.existsSync()) f.deleteSync();
-                                  setState(() => _attachedAudioPath = null);
-                                },
-                              ),
-                            ),
-                        ],
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(_attachedImage!, width: 40, height: 40, fit: BoxFit.cover),
+                        ),
+                        title: const Text('Фото прикреплено', style: TextStyle(fontSize: 14)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, color: Colors.red),
+                          onPressed: () => setState(() => _attachedImage = null),
+                        ),
                       ),
                     ),
 
@@ -408,30 +328,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_isRecording ? 'Идёт запись...' : 'Лень писать?', 
-                          style: TextStyle(color: _isRecording ? Colors.red : (isDark ? Colors.white54 : Colors.grey[600]), fontSize: 13, fontWeight: _isRecording ? FontWeight.bold : FontWeight.normal)),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.attach_file, color: isDark ? Colors.blueGrey[400] : Colors.blueGrey),
-                              onPressed: _isRecording ? null : _showImageSourceDialog,
-                            ),
-                            GestureDetector(
-                              onTap: _toggleRecording,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: _isRecording ? Colors.red : (isDark ? Colors.orange[900]?.withOpacity(0.3) : Colors.orange[50]),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  _isRecording ? Icons.stop : Icons.mic, 
-                                  color: _isRecording ? Colors.white : Colors.orange[700]
-                                ),
-                              ),
-                            ),
-                          ],
+                        Text('Лень писать?', style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[600], fontSize: 13)),
+                        IconButton(
+                          icon: Icon(Icons.attach_file, color: isDark ? Colors.blueGrey[400] : Colors.blueGrey),
+                          onPressed: _showImageSourceDialog,
                         )
                       ],
                     ),
@@ -491,3 +391,4 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 }
+
