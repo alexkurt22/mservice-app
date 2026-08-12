@@ -68,9 +68,9 @@ jobs:
           KEYSTORE_SECRET: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           mkdir -p assets
-          echo "$FIREBASE_SECRET" | base64 -d > assets/firebase_credentials.json
+          echo -n "$FIREBASE_SECRET" | tr -d '\n\r ' | base64 -d -i > assets/firebase_credentials.json
           
-          echo "$KEYSTORE_SECRET" | base64 -d > android/app/upload-keystore.jks
+          echo -n "$KEYSTORE_SECRET" | tr -d '\n\r ' | base64 -d -i > android/app/upload-keystore.jks
           
           cat << 'EOF' > setup_signing.dart
           import 'dart:io';
