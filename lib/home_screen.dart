@@ -1,19 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 
-// ИСПРАВЛЕННЫЕ ПРАВИЛЬНЫЕ ПУТИ
 import 'screens/my_orders_screen.dart';
 import 'screens/create_order_screen.dart';
 import 'login_screen.dart';
 import 'screens/support_chat_screen.dart';
-import 'screens/services_catalog_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
+import 'screens/store_screen.dart'; // <--- НОВЫЙ ИМПОРТ МАГАЗИНА
 
 const String CURRENT_APP_VERSION = "1.0.0";
 
@@ -54,9 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _maxDiscountPercentUI = doc.data()!['max_discount_percent'];
         });
       }
-    } catch (e) {
-      debugPrint('Ошибка загрузки настроек: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _addBonusHistory(String phone, int amount, String description) async {
@@ -184,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await messaging.subscribeToTopic('all_users');
   }
 
+  // --- ИЗМЕНЕННАЯ КНОПКА "+" (БЕЗ КАТАЛОГА УСЛУГ) ---
   void _showCreateActionSheet() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
@@ -205,22 +204,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.red[900]?.withOpacity(0.3) : Colors.red[50],
                   leading: CircleAvatar(backgroundColor: isDark ? Colors.red[900]?.withOpacity(0.5) : Colors.red[100], child: Icon(Icons.sos, color: isDark ? Colors.red[300] : Colors.red[700])),
                   title: Text('Вызвать мастера / SOS', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                  subtitle: Text('Не знаю, что сломалось', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
+                  subtitle: Text('Сломалось устройство? Оставьте заявку', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
                   onTap: () { 
                     Navigator.pop(context); 
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => CreateOrderScreen())); // УБРАН CONST
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.blue[900]?.withOpacity(0.3) : Colors.blue[50],
-                  leading: CircleAvatar(backgroundColor: isDark ? Colors.blue[900]?.withOpacity(0.5) : Colors.blue[100], child: Icon(Icons.list_alt, color: isDark ? Colors.blue[300] : Colors.blue[700])),
-                  title: Text('Выбрать услугу из Каталога', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                  subtitle: Text('Точно знаю, что мне нужно', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
-                  onTap: () { 
-                    Navigator.pop(context); 
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => ServicesCatalogScreen())); // УБРАН CONST
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen())); 
                   },
                 ),
                 const SizedBox(height: 12),
@@ -229,13 +216,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), tileColor: isDark ? Colors.orange[900]?.withOpacity(0.3) : Colors.orange[50],
                   leading: CircleAvatar(backgroundColor: isDark ? Colors.orange[900]?.withOpacity(0.5) : Colors.orange[100], child: Icon(Icons.shopping_bag, color: isDark ? Colors.orange[300] : Colors.orange[700])),
                   title: Text('Магазин техники', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                  subtitle: Text('Б/У и новые устройства', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
+                  subtitle: Text('Новые и Б/У устройства', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
                   onTap: () { 
                     Navigator.pop(context); 
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Магазин находится в разработке! 🚀'), 
-                      backgroundColor: Colors.blueGrey,
-                    )); 
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())); 
                   },
                 ),
               ],
@@ -243,102 +227,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       }
-    );
-  }
-
-  void _showReviewDialog(QueryDocumentSnapshot order, Map<String, dynamic> data) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    int rating = 5;
-    bool isAnonymous = false;
-    final commentController = TextEditingController();
-    bool isSubmitting = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setStateDialog) {
-          return AlertDialog(
-            backgroundColor: Theme.of(context).cardColor,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text('Оцените работу', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87), textAlign: TextAlign.center),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Насколько вы довольны ремонтом?', style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.blueGrey)),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (index) {
-                    return IconButton(
-                      iconSize: 36,
-                      icon: Icon(index < rating ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.orangeAccent),
-                      onPressed: () => setStateDialog(() => rating = index + 1),
-                    );
-                  }),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: commentController,
-                  maxLines: 3,
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                  decoration: InputDecoration(
-                    hintText: 'Напишите пару слов...',
-                    hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
-                    filled: true, fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                CheckboxListTile(
-                  title: Text('Оставить анонимно', style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
-                  value: isAnonymous, dense: true, contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading, activeColor: isDark ? Colors.blueGrey[300] : Colors.blueGrey,
-                  onChanged: (val) => setStateDialog(() => isAnonymous = val ?? false),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена', style: TextStyle(color: Colors.grey))),
-              isSubmitting 
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600]),
-                    onPressed: () async {
-                      setStateDialog(() => isSubmitting = true);
-                      
-                      String clientName = data['client_name'] ?? 'Клиент';
-                      if (isAnonymous) {
-                         clientName = clientName.length > 2 ? '${clientName.substring(0, 1)}***' : 'Аноним';
-                      }
-
-                      try {
-                        await FirebaseFirestore.instance.collection('reviews').add({
-                          'rating': rating,
-                          'text': commentController.text.trim(),
-                          'author_name': clientName,
-                          'device_type': data['device_type'] ?? 'Устройство',
-                          'created_at': FieldValue.serverTimestamp(),
-                          'is_approved': false, 
-                        });
-
-                        await order.reference.update({'is_reviewed': true, 'review_rating': rating});
-
-                        if (mounted) {
-                           Navigator.pop(ctx);
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Отзыв отправлен!'), backgroundColor: Colors.green));
-                        }
-                      } catch(e) {
-                         setStateDialog(() => isSubmitting = false);
-                         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
-                      }
-                    },
-                    child: const Text('Отправить', style: TextStyle(color: Colors.white)),
-                  ),
-            ],
-          );
-        }
-      ),
     );
   }
 
@@ -352,66 +240,223 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildReviewsCarousel(bool isDark) {
+  // --- ЛОГИКА ЛАЙКОВ ---
+  Future<void> _toggleLike(String docId, List<dynamic> likedBy) async {
+    if (_phone == null) return;
+    
+    final docRef = FirebaseFirestore.instance.collection('news_feed').doc(docId);
+    if (likedBy.contains(_phone)) {
+      await docRef.update({
+        'liked_by': FieldValue.arrayRemove([_phone]),
+        'likes_count': FieldValue.increment(-1),
+      });
+    } else {
+      await docRef.update({
+        'liked_by': FieldValue.arrayUnion([_phone]),
+        'likes_count': FieldValue.increment(1),
+      });
+    }
+  }
+
+  // --- ЛОГИКА ОПРОСОВ ---
+  Future<void> _voteInPoll(String docId, Map<String, dynamic> pollData, int optionIndex) async {
+    if (_phone == null) return;
+    List<dynamic> votedUsers = pollData['voted_users'] ?? [];
+    if (votedUsers.contains(_phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Вы уже проголосовали!')));
+      return; 
+    }
+
+    List<dynamic> options = pollData['options'];
+    options[optionIndex]['votes'] = (options[optionIndex]['votes'] ?? 0) + 1;
+    votedUsers.add(_phone);
+
+    await FirebaseFirestore.instance.collection('news_feed').doc(docId).update({
+      'poll.options': options,
+      'poll.voted_users': votedUsers,
+      'poll.total_votes': FieldValue.increment(1),
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ваш голос учтен!'), backgroundColor: Colors.green));
+  }
+
+  // --- ЛЕНТА НОВОСТЕЙ (ДИНАМИЧЕСКАЯ ИЗ БАЗЫ) ---
+  Widget _buildNewsFeed(bool isDark) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('reviews').where('is_approved', isEqualTo: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection('news_feed').where('is_active', isEqualTo: true).orderBy('created_at', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Column(
-            children: [
-              Icon(Icons.forum, size: 64, color: isDark ? Colors.grey[700] : Colors.grey[300]),
-              const SizedBox(height: 16),
-              Text('Здесь будут отзывы', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[500], fontSize: 16)),
-            ],
-          );
+          return const SizedBox.shrink(); // Если новостей нет, блок просто скрывается
         }
 
-        var docs = snapshot.data!.docs;
+        final docs = snapshot.data!.docs;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text('Отзывы клиентов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey)),
+              child: Text('События и Акции', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.blueGrey)),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              height: 160,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: docs.length,
-                itemBuilder: (context, index) {
-                  final data = docs[index].data() as Map<String, dynamic>;
-                  return Container(
-                    width: 280, 
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor, 
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey.shade200),
+            ...docs.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final type = data['type'] ?? 'Новость';
+              final title = data['title'] ?? '';
+              final content = data['content'] ?? '';
+              final imageBase64 = data['image_base64'];
+              
+              final allowLikes = data['allow_likes'] ?? true;
+              final allowComments = data['allow_comments'] ?? true;
+              
+              final likesCount = data['likes_count'] ?? 0;
+              final likedBy = data['liked_by'] as List<dynamic>? ?? [];
+              final isLikedByMe = _phone != null && likedBy.contains(_phone);
+              
+              final poll = data['poll'] as Map<String, dynamic>?;
+              final hasPoll = poll != null;
+              final hasVoted = hasPoll && _phone != null && (poll['voted_users'] as List<dynamic>? ?? []).contains(_phone);
+
+              String dateStr = '';
+              if (data['created_at'] != null) {
+                final dt = (data['created_at'] as Timestamp).toDate();
+                dateStr = DateFormat('dd.MM').format(dt);
+              }
+
+              return Container(
+                margin: const EdgeInsets.only(left: 16, right: 16, bottom: 20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))],
+                  border: Border.all(color: isDark ? Colors.grey[800]! : Colors.transparent)
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Шапка карточки (Тип и Дата)
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: type == 'Акция' ? Colors.orange[100] : (type == 'Конкурс' ? Colors.pink[100] : Colors.blue[100]),
+                              borderRadius: BorderRadius.circular(8)
+                            ),
+                            child: Text(type, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: type == 'Акция' ? Colors.orange[900] : (type == 'Конкурс' ? Colors.pink[900] : Colors.blue[900]))),
+                          ),
+                          Text(dateStr, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                    // Картинка (если есть)
+                    if (imageBase64 != null && imageBase64.toString().isNotEmpty)
+                      Image.memory(base64Decode(imageBase64), width: double.infinity, height: 200, fit: BoxFit.cover),
+                    
+                    // Заголовок и Текст
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                          const SizedBox(height: 8),
+                          Text(content, maxLines: 4, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, height: 1.4, color: isDark ? Colors.grey[300] : Colors.black87)),
+                        ],
+                      ),
+                    ),
+
+                    // ОПРОС (ЕСЛИ ЕСТЬ)
+                    if (hasPoll)
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(data['author_name'] ?? 'Клиент', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87)),
-                            Row(children: List.generate(5, (starIdx) => Icon(starIdx < (data['rating'] ?? 5) ? Icons.star_rounded : Icons.star_border_rounded, color: Colors.orangeAccent, size: 16)))
+                            Text(poll['question'] ?? 'Опрос', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
+                            const SizedBox(height: 12),
+                            ...(poll['options'] as List<dynamic>).asMap().entries.map((entry) {
+                              int idx = entry.key;
+                              Map<String, dynamic> opt = entry.value;
+                              int votes = opt['votes'] ?? 0;
+                              int total = poll['total_votes'] ?? 0;
+                              double percent = total == 0 ? 0 : votes / total;
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: hasVoted
+                                  ? Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(opt['text'], style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.black87)),
+                                            Text('${(percent * 100).toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        LinearProgressIndicator(value: percent, backgroundColor: Colors.grey[300], color: Colors.deepPurple, borderRadius: BorderRadius.circular(4)),
+                                      ],
+                                    )
+                                  : OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size(double.infinity, 40),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      onPressed: () => _voteInPoll(doc.id, poll, idx),
+                                      child: Text(opt['text']),
+                                    ),
+                              );
+                            }).toList(),
+                            if (hasVoted)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text('Всего голосов: ${poll['total_votes']}', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                              )
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(data['device_type'] ?? '', style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[500], fontSize: 11)),
-                        const SizedBox(height: 8),
-                        Expanded(child: Text(data['text'] ?? '', maxLines: 4, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black87))),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
+                      ),
+
+                    // ПАНЕЛЬ ЛАЙКОВ И КОММЕНТАРИЕВ
+                    Container(
+                      decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.grey[800]! : Colors.grey[200]!))),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (allowLikes)
+                            TextButton.icon(
+                              onPressed: () => _toggleLike(doc.id, likedBy),
+                              icon: Icon(isLikedByMe ? Icons.favorite : Icons.favorite_border, color: isLikedByMe ? Colors.red : Colors.grey),
+                              label: Text('$likesCount', style: TextStyle(color: isLikedByMe ? Colors.red : Colors.grey, fontWeight: FontWeight.bold)),
+                            )
+                          else
+                            const SizedBox.shrink(),
+
+                          if (allowComments)
+                            TextButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Комментарии откроются в следующем обновлении!')));
+                              },
+                              icon: const Icon(Icons.chat_bubble_outline, color: Colors.blue),
+                              label: const Text('Обсудить', style: TextStyle(color: Colors.blue)),
+                            )
+                          else
+                            const SizedBox.shrink(),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              );
+            }).toList(),
           ],
         );
       },
@@ -424,17 +469,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ListView(
           padding: const EdgeInsets.only(bottom: 100), 
           children: [
+            // АКТИВНЫЕ ЗАКАЗЫ (ЕСЛИ ЕСТЬ)
             if (_phone != null)
               StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('status', whereIn: ['new', 'awaiting_approval', 'in_progress', 'completed']).snapshots(),
+                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('status', whereIn: ['new', 'awaiting_approval', 'in_progress']).snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox.shrink(); 
-                  final docs = snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    if (data['status'] == 'completed' && data['is_reviewed'] == true) return false;
-                    return true;
-                  }).toList();
-                  if (docs.isEmpty) return const SizedBox.shrink();
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink(); 
+                  final docs = snapshot.data!.docs;
 
                   return Column(
                     children: docs.map((doc) {
@@ -444,7 +485,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       return GestureDetector(
                         onTap: () {
-                           if (status != 'completed') Navigator.push(context, MaterialPageRoute(builder: (context) => MyOrdersScreen())); // УБРАН CONST
+                           Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
                         },
                         child: Container(
                           margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
@@ -453,35 +494,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             gradient: LinearGradient(colors: [(statusInfo['color'] as Color).withOpacity(0.8), statusInfo['color']], begin: Alignment.topLeft, end: Alignment.bottomRight),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Row(
-                                children: [
-                                  CircleAvatar(backgroundColor: Colors.white24, child: Icon(statusInfo['icon'], color: Colors.white)),
-                                  const SizedBox(width: 16),
-                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                    Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                                    Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
-                                  ])),
-                                  if (status != 'completed') const Icon(Icons.chevron_right, color: Colors.white),
-                                ],
-                              ),
-                              if (status == 'completed') ...[
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.green[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                        onPressed: () => _showReviewDialog(doc, data), icon: const Icon(Icons.star, color: Colors.orange), label: const Text('Оставить отзыв'),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () async { await doc.reference.update({'is_reviewed': true}); }),
-                                  ],
-                                )
-                              ]
+                              CircleAvatar(backgroundColor: Colors.white24, child: Icon(statusInfo['icon'], color: Colors.white)),
+                              const SizedBox(width: 16),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              ])),
+                              const Icon(Icons.chevron_right, color: Colors.white),
                             ],
                           ),
                         ),
@@ -490,9 +511,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 40),
-              _buildReviewsCarousel(isDark),
-              const SizedBox(height: 40),
+              
+              const SizedBox(height: 24),
+              // НОВАЯ ЛЕНТА НОВОСТЕЙ
+              _buildNewsFeed(isDark),
           ],
         ),
         if (_phone != null)
@@ -513,7 +535,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   isLabelVisible: unread > 0, label: Text(unread.toString()), offset: const Offset(-4, -4), backgroundColor: Colors.red,
                   child: FloatingActionButton(
                     heroTag: 'chat_btn', 
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SupportChatScreen())), // УБРАН CONST 
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen())), 
                     backgroundColor: isDark ? Colors.blueGrey[700] : Colors.blueGrey[900], 
                     child: const Icon(Icons.chat, color: Colors.white)
                   ),
@@ -541,7 +563,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: Icon(Icons.notifications_none, color: isDark ? Colors.white : Colors.blueGrey[900]),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsScreen())); // УБРАН CONST
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsScreen())); 
             },
           ),
           const SizedBox(width: 8),
@@ -618,3 +640,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
