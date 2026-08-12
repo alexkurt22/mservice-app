@@ -16,7 +16,6 @@ import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/store_screen.dart'; 
 
-// ИМПОРТЫ НОВЫХ ЭКРАНОВ ДЛЯ МЕНЮ
 import 'screens/reviews_screen.dart'; 
 import 'screens/about_screen.dart'; 
 import 'screens/contacts_screen.dart'; 
@@ -183,6 +182,21 @@ class _HomeScreenState extends State<HomeScreen> {
       await FirebaseFirestore.instance.collection('clients').doc(_phone).set({'fcm_token': token}, SetOptions(merge: true));
     }
     await messaging.subscribeToTopic('all_users');
+
+    // ДОБАВЛЕНО: Перехват пушей, когда приложение открыто на экране!
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      HapticFeedback.heavyImpact(); // Вибрация
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message.notification?.title ?? 'Новое уведомление!', style: const TextStyle(fontWeight: FontWeight.bold)),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.blueGrey[800],
+            duration: const Duration(seconds: 4),
+          )
+        );
+      }
+    });
   }
 
   void _showCreateActionSheet() {
@@ -207,7 +221,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(backgroundColor: isDark ? Colors.red[900]?.withOpacity(0.5) : Colors.red[100], child: Icon(Icons.sos, color: isDark ? Colors.red[300] : Colors.red[700])),
                   title: Text('Вызвать мастера / SOS', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                   subtitle: Text('Сломалось устройство? Оставьте заявку', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
-                  onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen())); },
+                  onTap: () { 
+                    Navigator.pop(context); 
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateOrderScreen())); 
+                  },
                 ),
                 const SizedBox(height: 12),
 
@@ -216,7 +233,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(backgroundColor: isDark ? Colors.orange[900]?.withOpacity(0.5) : Colors.orange[100], child: Icon(Icons.shopping_bag, color: isDark ? Colors.orange[300] : Colors.orange[700])),
                   title: Text('Магазин техники', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                   subtitle: Text('Новые и Б/У устройства', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54)),
-                  onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())); },
+                  onTap: () { 
+                    Navigator.pop(context); 
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())); 
+                  },
                 ),
               ],
             ),
@@ -286,15 +306,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600]),
                     onPressed: () async {
                       setStateDialog(() => isSubmitting = true);
+                      
                       String clientName = data['client_name'] ?? 'Клиент';
-                      if (isAnonymous) clientName = clientName.length > 2 ? '${clientName.substring(0, 1)}***' : 'Аноним';
+                      if (isAnonymous) {
+                         clientName = clientName.length > 2 ? '${clientName.substring(0, 1)}***' : 'Аноним';
+                      }
+
                       try {
                         await FirebaseFirestore.instance.collection('reviews').add({
-                          'rating': rating, 'text': commentController.text.trim(),
-                          'author_name': clientName, 'device_type': data['device_type'] ?? 'Устройство',
-                          'created_at': FieldValue.serverTimestamp(), 'is_approved': false, 
+                          'rating': rating,
+                          'text': commentController.text.trim(),
+                          'author_name': clientName,
+                          'device_type': data['device_type'] ?? 'Устройство',
+                          'created_at': FieldValue.serverTimestamp(),
+                          'is_approved': false, 
                         });
+
                         await order.reference.update({'is_reviewed': true, 'review_rating': rating});
+
                         if (mounted) {
                            Navigator.pop(ctx);
                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Отзыв отправлен!'), backgroundColor: Colors.green));
@@ -744,7 +773,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- БОКОВОЕ МЕНЮ (С НОВЫМИ ПУНКТАМИ) ---
+  // --- БОКОВОЕ МЕНЮ (DRAWER) ---
   Widget _buildDrawer(bool isDark) {
     return Drawer(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -811,10 +840,16 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             if (_phone != null)
               StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('status', whereIn: ['new', 'awaiting_approval', 'in_progress']).snapshots(),
+                // ИСПРАВЛЕНИЕ БАГА: ДОБАВЛЕН 'completed' !!!
+                stream: FirebaseFirestore.instance.collection('orders').where('phone', isEqualTo: _phone).where('status', whereIn: ['new', 'awaiting_approval', 'in_progress', 'completed']).snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink(); 
-                  final docs = snapshot.data!.docs;
+                  if (!snapshot.hasData) return const SizedBox.shrink(); 
+                  final docs = snapshot.data!.docs.where((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    if (data['status'] == 'completed' && data['is_reviewed'] == true) return false;
+                    return true;
+                  }).toList();
+                  if (docs.isEmpty) return const SizedBox.shrink();
 
                   return Column(
                     children: docs.map((doc) {
@@ -824,7 +859,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       return GestureDetector(
                         onTap: () {
-                           Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+                           if (status != 'completed') Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
                         },
                         child: Container(
                           margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
@@ -833,15 +868,35 @@ class _HomeScreenState extends State<HomeScreen> {
                             gradient: LinearGradient(colors: [(statusInfo['color'] as Color).withOpacity(0.8), statusInfo['color']], begin: Alignment.topLeft, end: Alignment.bottomRight),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              CircleAvatar(backgroundColor: Colors.white24, child: Icon(statusInfo['icon'], color: Colors.white)),
-                              const SizedBox(width: 16),
-                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                                Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
-                              ])),
-                              const Icon(Icons.chevron_right, color: Colors.white),
+                              Row(
+                                children: [
+                                  CircleAvatar(backgroundColor: Colors.white24, child: Icon(statusInfo['icon'], color: Colors.white)),
+                                  const SizedBox(width: 16),
+                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Text(data['device_type'] ?? 'Устройство', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text(statusInfo['text'], style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                  ])),
+                                  if (status != 'completed') const Icon(Icons.chevron_right, color: Colors.white),
+                                ],
+                              ),
+                              if (status == 'completed') ...[
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.green[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                        onPressed: () => _showReviewDialog(doc, data), icon: const Icon(Icons.star, color: Colors.orange), label: const Text('Оставить отзыв'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () async { await doc.reference.update({'is_reviewed': true}); }),
+                                  ],
+                                )
+                              ]
                             ],
                           ),
                         ),
